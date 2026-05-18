@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { calcularPartes } from '@/services/compartido.service'
+import { periodoFacturacion } from '@/lib/billingCycle'
 import type {
   Usuario, Gasto, GastoFijo, PlanCuotas, CuotaMensual, TarjetaCredito,
 } from '@/types'
@@ -41,6 +42,12 @@ function agregarHojaUsuario(
   const label = `${MESES[periodo.mes - 1]} ${periodo.anio}`
   const prefijo = `${periodo.anio}-${String(periodo.mes).padStart(2, '0')}`
 
+  // Build billing-period map per card (same logic as Dashboard/Tarjetas)
+  const diaCierrePorTarjeta = new Map<string, number>()
+  tarjetas.forEach((t) => {
+    if (t.tipo === 'credito' && t.diaCierre) diaCierrePorTarjeta.set(t.id, t.diaCierre)
+  })
+
   function conv(monto: number, moneda: string): number {
     if (moneda === usuario.monedaPreferida) return monto
     if (moneda === 'USD') return monto * tipoCambio
@@ -61,7 +68,15 @@ function agregarHojaUsuario(
   rows.push(h('GASTOS VARIABLES'))
   rows.push(['Fecha', 'Concepto', 'Categoría', 'Tarjeta', 'Moneda orig.', 'Monto total', `Mi parte (${usuario.monedaPreferida})`, 'Compartido', 'Split'])
 
-  const gastosDelMes = gastos.filter((g) => g.fecha.startsWith(prefijo))
+  // Filter by billing period per card, or calendar month for cash/debit
+  const gastosDelMes = gastos.filter((g) => {
+    const diaCierre = g.tarjetaId ? diaCierrePorTarjeta.get(g.tarjetaId) : undefined
+    if (diaCierre) {
+      const { desde, hasta } = periodoFacturacion(periodo.anio, periodo.mes, diaCierre)
+      return g.fecha >= desde && g.fecha <= hasta
+    }
+    return g.fecha.startsWith(prefijo)
+  })
   let subtotalVar = 0
   for (const g of gastosDelMes) {
     const esMio = g.usuarioId === usuario.id
