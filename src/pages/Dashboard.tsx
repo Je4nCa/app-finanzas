@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow, Plus, TrendingDown } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow, Plus, TrendingDown, FileSpreadsheet, Calculator } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { periodoFacturacion } from '@/lib/billingCycle'
@@ -11,6 +11,8 @@ import { EstadoCuota } from '@/types'
 import { cn } from '@/lib/utils'
 import { nanoid } from 'nanoid'
 import PageWrapper from '@components/ui/PageWrapper'
+import CalculadorPago from '@components/CalculadorPago'
+import { generarReporteExcel } from '@/lib/generarReporte'
 import type { Gasto, GastoFijo, CuotaMensual, PlanCuotas, Usuario, TarjetaCredito, Salario } from '@/types'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -405,6 +407,23 @@ export default function Dashboard() {
   const esMesActual = periodo.anio === now.getFullYear() && periodo.mes === now.getMonth() + 1
   const loading     = !totales || !tarjetas
 
+  const [calculadorUsuarioId, setCalculadorUsuarioId] = useState<string | null>(null)
+  const calculadorUsuario = calculadorUsuarioId ? usuarios?.find((u) => u.id === calculadorUsuarioId) : null
+
+  function handleDescargarReporte() {
+    if (!gastos || !gastosFijos || !planes || !cuotas || !usuarios || !tarjetas) return
+    generarReporteExcel({
+      periodo,
+      usuarios,
+      gastos,
+      gastosFijos,
+      planesCuotas: planes,
+      cuotasMensuales: cuotas ?? [],
+      tarjetas,
+      tipoCambio,
+    })
+  }
+
   return (
     <PageWrapper className="px-4 py-6 flex flex-col gap-5">
 
@@ -527,6 +546,23 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground font-medium">Quincena 1 + Quincena 2</p>
                 </div>
               </div>
+              {/* Calculadora buttons per user */}
+              <div className="flex gap-2 mb-4">
+                {usuarios.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => setCalculadorUsuarioId(u.id)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <Calculator size={13} />
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: u.color }}
+                    />
+                    {u.nombre}
+                  </button>
+                ))}
+              </div>
 
               <div className="flex flex-col gap-5">
                 {usuarios.map((u, idx) => (
@@ -570,7 +606,35 @@ export default function Dashboard() {
               sub={`${gastosFijos?.length ?? 0} activo${(gastosFijos?.length ?? 0) !== 1 ? 's' : ''}`}
             />
           </div>
+
+          {/* ── Reporte Excel ─── */}
+          <button
+            onClick={handleDescargarReporte}
+            className="flex items-center justify-center gap-2 h-12 rounded-2xl border border-border bg-card text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            <FileSpreadsheet size={18} className="text-green-500" />
+            Descargar reporte Excel
+          </button>
         </>
+      )}
+
+      {/* ── Calculadora de pago (modal) ─── */}
+      {calculadorUsuario && totales && (
+        <CalculadorPago
+          usuario={calculadorUsuario}
+          totalEnMoneda={(() => {
+            const gastoBase = totales.porUsuario[calculadorUsuario.id] ?? 0
+            return calculadorUsuario.monedaPreferida === monedaBase
+              ? gastoBase
+              : monedaBase === 'USD'
+                ? gastoBase * tipoCambio
+                : gastoBase / tipoCambio
+          })()}
+          monedaUsuario={calculadorUsuario.monedaPreferida as 'USD' | 'CRC'}
+          tipoCambio={tipoCambio}
+          tipoCambioCompra={useMonedaStore.getState().tipoCambioCompra}
+          onCerrar={() => setCalculadorUsuarioId(null)}
+        />
       )}
     </PageWrapper>
   )

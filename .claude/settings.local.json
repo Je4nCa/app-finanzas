@@ -10,7 +10,24 @@
       "WebFetch(domain:app.ariari.com)",
       "WebFetch(domain:open.er-api.com)",
       "Bash(node -e \"require\\('zlib'\\)\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(curl -s \"https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\")",
+      "Bash(curl -s \"https://gee.bccr.fi.cr/Indicadores/Suscripciones/WS/wsindicadoreseconomicos.asmx?WSDL\")",
+      "Bash(curl -s -I \"https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\")",
+      "Bash(curl -s -I \"https://gee.bccr.fi.cr/Indicadores/Suscripciones/WS/wsindicadoreseconomicos.asmx\")",
+      "Bash(python3 -c 'import urllib.parse; print\\(urllib.parse.quote\\(\"https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\"\\)\\)')",
+      "Bash(curl -s \"https://api.allorigins.win/get?url=$\\(python3 -c 'import urllib.parse; print\\(urllib.parse.quote\\(\"https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\"\\)\\)'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['contents'][:500] if d.get\\('contents'\\) else 'FAILED'\\)\")",
+      "Bash(curl -s \"https://api.allorigins.win/get?url=https%3A%2F%2Fgee.bccr.fi.cr%2FIndicadoresEconomicos%2FCuadros%2FfrmConsultaTCVentanilla.aspx\")",
+      "Bash(curl -s -I \"https://corsproxy.io/?https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\")",
+      "Bash(curl -s \"https://api.codetabs.com/v1/proxy?quest=https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\")",
+      "Bash(curl -s \"https://thingproxy.freeboard.io/fetch/https://gee.bccr.fi.cr/IndicadoresEconomicos/Cuadros/frmConsultaTCVentanilla.aspx\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('dependencies',{}\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('devDependencies',{}\\), indent=2\\)\\)\")",
+      "Bash(npm list *)"
     ]
   }
 }

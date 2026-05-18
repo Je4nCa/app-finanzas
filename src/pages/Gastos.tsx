@@ -6,7 +6,7 @@ import { hCol } from '@/lib/firebase'
 import { gastosRepository, gastosFijosRepository } from '@/repositories'
 import { useGastosStore } from '@/store'
 import { CATEGORIA_MAP } from '@/constants/categorias'
-import { etiquetaSplit } from '@/services/compartido.service'
+import { calcularPartes, etiquetaSplit } from '@/services/compartido.service'
 import { mesDePago } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
@@ -33,6 +33,13 @@ function labelMesPago(mes: number, anio: number, anioActual: number): string {
   return `${MESES[mes - 1]} ${anio}`
 }
 
+/** Returns the amount this user owes for the given expense */
+function montoParaUsuario(gasto: Gasto, userId: string): number {
+  if (!gasto.esCompartido || !gasto.detalleCompartido) return gasto.monto
+  const partes = calcularPartes(gasto.monto, gasto.detalleCompartido)
+  return gasto.usuarioId === userId ? partes.montoPagador : partes.montoOtro
+}
+
 export default function Gastos() {
   const setPeriodo = useGastosStore((s) => s.setPeriodo)
 
@@ -52,7 +59,6 @@ export default function Gastos() {
 
   const [tab, setTab] = useState<Tab>('variables')
 
-  // Filter state (variables tab only)
   const [filtroTarjeta, setFiltroTarjeta] = useState<string | null>(null)
   const [filtroCompartido, setFiltroCompartido] = useState(false)
   const [filtroUsuario, setFiltroUsuario] = useState<string | null>(null)
@@ -85,19 +91,35 @@ export default function Gastos() {
     return gastosMes.filter((g) => {
       if (filtroTarjeta && g.tarjetaId !== filtroTarjeta) return false
       if (filtroCompartido && !g.esCompartido) return false
-      if (filtroUsuario && g.usuarioId !== filtroUsuario) return false
+      if (filtroUsuario) {
+        // Include: expenses paid by this user, OR shared expenses paid by the other user
+        const esSuyo = g.usuarioId === filtroUsuario
+        const esCompartidoConEl = g.esCompartido && g.usuarioId !== filtroUsuario
+        if (!esSuyo && !esCompartidoConEl) return false
+      }
       return true
     })
   }, [gastosMes, filtroTarjeta, filtroCompartido, filtroUsuario])
 
   const gastosFijos = useMemo(() => todosGastosFijos, [todosGastosFijos])
 
-  // Build tarjetaMap for quick lookup
   const tarjetaMap = useMemo(() => {
     const map = new Map<string, TarjetaCredito>()
     tarjetas?.forEach((t) => map.set(t.id, t))
     return map
   }, [tarjetas])
+
+  // When a user filter is active, compute each user's total (their portions)
+  const totalFiltrado = useMemo(() => {
+    if (!gastos || !filtroUsuario) return null
+    // Group by moneda
+    const totales: Record<string, number> = {}
+    for (const g of gastos) {
+      const monto = montoParaUsuario(g, filtroUsuario)
+      totales[g.moneda] = (totales[g.moneda] ?? 0) + monto
+    }
+    return totales
+  }, [gastos, filtroUsuario])
 
   async function handleEliminarGasto(id: string) {
     await gastosRepository.eliminar(id)
@@ -117,10 +139,12 @@ export default function Gastos() {
   const chipSelected = 'bg-primary text-primary-foreground'
   const chipUnselected = 'bg-secondary text-muted-foreground hover:bg-secondary/80'
 
+  const usuarioFiltrado = filtroUsuario ? usuarios?.find((u) => u.id === filtroUsuario) : null
+
   return (
     <PageWrapper className="px-4 py-6 flex flex-col gap-6">
 
-      {/* Encabezado con navegación de mes */}
+      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Gastos</h1>
@@ -132,7 +156,6 @@ export default function Gastos() {
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Month navigation */}
           <button
             onClick={() => navMes(-1)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -187,10 +210,9 @@ export default function Gastos() {
       {/* ── TAB VARIABLES ─────────────────────────────────── */}
       {tab === 'variables' && (
         <>
-          {/* Filter bar — only when not in form */}
+          {/* Filter bar */}
           {!mostrarFormGasto && (
             <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
-              {/* Todas */}
               <button
                 onClick={() => { setFiltroTarjeta(null); setFiltroCompartido(false); setFiltroUsuario(null) }}
                 className={cn(chipBase, !filtroTarjeta && !filtroCompartido && !filtroUsuario ? chipSelected : chipUnselected)}
@@ -198,22 +220,17 @@ export default function Gastos() {
                 Todas
               </button>
 
-              {/* Tarjetas */}
               {tarjetas?.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setFiltroTarjeta(filtroTarjeta === t.id ? null : t.id)}
                   className={cn(chipBase, filtroTarjeta === t.id ? chipSelected : chipUnselected, 'flex items-center gap-1.5')}
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: t.color }}
-                  />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
                   {t.nombre}
                 </button>
               ))}
 
-              {/* Compartidos */}
               <button
                 onClick={() => setFiltroCompartido(!filtroCompartido)}
                 className={cn(chipBase, filtroCompartido ? chipSelected : chipUnselected)}
@@ -221,7 +238,6 @@ export default function Gastos() {
                 Compartidos
               </button>
 
-              {/* Usuarios */}
               {usuarios?.map((u) => (
                 <button
                   key={u.id}
@@ -237,6 +253,34 @@ export default function Gastos() {
                   {u.nombre}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Total por usuario (solo cuando hay filtro de usuario activo) */}
+          {!mostrarFormGasto && filtroUsuario && totalFiltrado && usuarioFiltrado && (
+            <div
+              className="rounded-2xl p-4 flex items-center justify-between"
+              style={{ backgroundColor: usuarioFiltrado.color + '18', border: `1px solid ${usuarioFiltrado.color}40` }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                  style={{ backgroundColor: usuarioFiltrado.color }}
+                >
+                  {usuarioFiltrado.nombre.charAt(0)}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total a pagar — {usuarioFiltrado.nombre}</p>
+                  <p className="text-[10px] text-muted-foreground">Solo su porción (gastos propios + compartidos)</p>
+                </div>
+              </div>
+              <div className="text-right">
+                {Object.entries(totalFiltrado).map(([moneda, monto]) => (
+                  <p key={moneda} className="text-base font-bold tabular-nums">
+                    {moneda === 'USD' ? '$' : '₡'}{monto.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                ))}
+              </div>
             </div>
           )}
 
@@ -277,8 +321,14 @@ export default function Gastos() {
             <div className="flex flex-col gap-2">
               {gastos.map((gasto) => {
                 const cat = CATEGORIA_MAP[gasto.categoriaId]
+                const esPagadorDelGasto = gasto.usuarioId === filtroUsuario
+                const montoMostrar = filtroUsuario
+                  ? montoParaUsuario(gasto, filtroUsuario)
+                  : gasto.monto
+                const esMontoReducido = filtroUsuario
+                  && gasto.esCompartido
+                  && montoMostrar !== gasto.monto
 
-                // Badge "Pago: Xxx" for credit card expenses
                 let badgePago: string | null = null
                 if (gasto.tarjetaId) {
                   const tarjeta = tarjetaMap.get(gasto.tarjetaId)
@@ -298,7 +348,15 @@ export default function Gastos() {
                         {cat?.emoji ?? '📦'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{gasto.titulo}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{gasto.titulo}</p>
+                          {/* Show who paid when filtering by user and it's not their expense */}
+                          {filtroUsuario && !esPagadorDelGasto && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground leading-none shrink-0">
+                              pagó {usuarios?.find(u => u.id === gasto.usuarioId)?.nombre ?? '?'}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <p className="text-xs text-muted-foreground">{gasto.fecha}</p>
                           {gasto.esCompartido && gasto.detalleCompartido && (
@@ -313,9 +371,17 @@ export default function Gastos() {
                           )}
                         </div>
                       </div>
-                      <p className="text-sm font-semibold tabular-nums shrink-0">
-                        {gasto.moneda === 'USD' ? '$' : '₡'}{gasto.monto.toLocaleString()}
-                      </p>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold tabular-nums">
+                          {gasto.moneda === 'USD' ? '$' : '₡'}{montoMostrar.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                        {/* Show full amount as reference when reduced */}
+                        {esMontoReducido && (
+                          <p className="text-[10px] text-muted-foreground tabular-nums line-through">
+                            {gasto.moneda === 'USD' ? '$' : '₡'}{gasto.monto.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </p>
+                        )}
+                      </div>
                       <div className="flex gap-1 ml-1">
                         <button
                           onClick={() => { setEliminandoGastoId(null); setPanelGasto({ tipo: 'editar', gasto }) }}
@@ -362,7 +428,6 @@ export default function Gastos() {
       {/* ── TAB FIJOS ─────────────────────────────────────── */}
       {tab === 'fijos' && (
         <>
-          {/* Formulario nuevo / editar fijo */}
           <AnimatePresence>
             {mostrarFormFijo && (
               <motion.div
@@ -386,7 +451,6 @@ export default function Gastos() {
             )}
           </AnimatePresence>
 
-          {/* Estado vacío */}
           {!mostrarFormFijo && gastosFijos?.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <span className="text-4xl">🔁</span>
@@ -394,7 +458,6 @@ export default function Gastos() {
             </div>
           )}
 
-          {/* Lista fijos */}
           {gastosFijos && gastosFijos.length > 0 && !mostrarFormFijo && (
             <div className="flex flex-col gap-2">
               {gastosFijos.map((gasto) => {
@@ -430,11 +493,8 @@ export default function Gastos() {
                           onClick={() => toggleActivo(gasto)}
                           className={cn(
                             'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
-                            gasto.activo
-                              ? 'text-primary hover:bg-secondary'
-                              : 'text-muted-foreground hover:bg-secondary'
+                            gasto.activo ? 'text-primary hover:bg-secondary' : 'text-muted-foreground hover:bg-secondary'
                           )}
-                          title={gasto.activo ? 'Pausar' : 'Activar'}
                         >
                           <RefreshCw size={15} />
                         </button>
