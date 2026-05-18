@@ -55,10 +55,10 @@ export default function CalculadorPago({
   return (
     /* Backdrop */
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onCerrar() }}
     >
-      <div className="w-full max-w-md bg-card rounded-t-3xl border-t border-border p-6 pb-8 flex flex-col gap-5">
+      <div className="w-full max-w-md bg-card rounded-3xl border border-border p-6 flex flex-col gap-5 shadow-2xl max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
