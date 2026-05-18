@@ -1,52 +1,43 @@
-import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { tarjetasRepository } from '@/repositories'
 import { useMonedaStore } from '@/store'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
 import FormularioTarjeta from '@components/tarjetas/FormularioTarjeta'
-import type { TarjetaCredito } from '@/types'
+import type { TarjetaCredito, Gasto } from '@/types'
 
 type PanelActivo =
   | { tipo: 'ninguno' }
   | { tipo: 'nueva' }
   | { tipo: 'editar'; tarjeta: TarjetaCredito }
 
-// Sub-componente aislado para poder llamar useLiveQuery por tarjeta débito
-function SaldoDebito({ tarjeta }: { tarjeta: TarjetaCredito }) {
+function SaldoDebito({ tarjeta, gastos }: { tarjeta: TarjetaCredito; gastos: Gasto[] }) {
   const tipoCambio = useMonedaStore((s) => s.tipoCambio)
 
-  const gastado = useLiveQuery(
-    () => db.gastos
-      .where('tarjetaId').equals(tarjeta.id)
-      .toArray()
-      .then((gastos) =>
-        gastos.reduce((sum, g) => {
-          const monto = g.moneda === tarjeta.moneda
-            ? g.monto
-            : g.moneda === 'USD'
-              ? g.monto * (g.tipoCambioAlMomento ?? tipoCambio)
-              : g.monto / (g.tipoCambioAlMomento ?? tipoCambio)
-          return sum + monto
-        }, 0)
-      ),
-    [tarjeta.id, tipoCambio]
+  const gastado = useMemo(() =>
+    gastos
+      .filter((g) => g.tarjetaId === tarjeta.id)
+      .reduce((sum, g) => {
+        const monto = g.moneda === tarjeta.moneda
+          ? g.monto
+          : g.moneda === 'USD'
+            ? g.monto * (g.tipoCambioAlMomento ?? tipoCambio)
+            : g.monto / (g.tipoCambioAlMomento ?? tipoCambio)
+        return sum + monto
+      }, 0),
+    [gastos, tarjeta, tipoCambio]
   )
 
-  const saldoActual = gastado != null ? (tarjeta.saldoInicial ?? 0) - gastado : null
-  const simbolo = tarjeta.moneda === 'USD' ? '$' : '₡'
-
-  if (saldoActual == null) return <span className="text-sm text-muted-foreground tabular-nums">—</span>
+  const saldoActual = (tarjeta.saldoInicial ?? 0) - gastado
+  const simbolo     = tarjeta.moneda === 'USD' ? '$' : '₡'
 
   return (
     <div className="text-right shrink-0">
-      <p className={cn(
-        'text-sm font-semibold tabular-nums',
-        saldoActual < 0 && 'text-destructive'
-      )}>
+      <p className={cn('text-sm font-semibold tabular-nums', saldoActual < 0 && 'text-destructive')}>
         {simbolo}{saldoActual.toLocaleString(undefined, { maximumFractionDigits: 2 })}
       </p>
       <p className="text-[10px] text-muted-foreground">disponible</p>
@@ -55,7 +46,9 @@ function SaldoDebito({ tarjeta }: { tarjeta: TarjetaCredito }) {
 }
 
 export default function Tarjetas() {
-  const tarjetas = useLiveQuery(() => db.tarjetas.toArray(), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const gastos   = useCollection<Gasto>(() => hCol('gastos'), [])
+
   const [panel, setPanel] = useState<PanelActivo>({ tipo: 'ninguno' })
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
 
@@ -93,7 +86,7 @@ export default function Tarjetas() {
         )}
       </div>
 
-      {/* Formulario nueva / editar */}
+      {/* Formulario */}
       <AnimatePresence>
         {mostrarFormulario && (
           <motion.div
@@ -130,7 +123,6 @@ export default function Tarjetas() {
         <div className="flex flex-col gap-3">
           {tarjetas.map((tarjeta) => (
             <div key={tarjeta.id}>
-
               <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border">
                 <div className="w-10 h-10 rounded-xl shrink-0" style={{ backgroundColor: tarjeta.color }} />
                 <div className="flex-1 min-w-0">
@@ -141,16 +133,14 @@ export default function Tarjetas() {
                   </p>
                 </div>
 
-                {/* Saldo / Límite */}
                 {tarjeta.tipo === 'debito' ? (
-                  <SaldoDebito tarjeta={tarjeta} />
+                  <SaldoDebito tarjeta={tarjeta} gastos={gastos ?? []} />
                 ) : tarjeta.limite ? (
                   <p className="text-sm font-medium tabular-nums shrink-0">
                     {tarjeta.moneda === 'USD' ? '$' : '₡'}{tarjeta.limite.toLocaleString()}
                   </p>
                 ) : null}
 
-                {/* Acciones */}
                 <div className="flex gap-1 ml-1">
                   <button
                     onClick={() => setPanel({ tipo: 'editar', tarjeta })}
@@ -167,7 +157,6 @@ export default function Tarjetas() {
                 </div>
               </div>
 
-              {/* Confirmación de borrado inline */}
               <AnimatePresence>
                 {eliminandoId === tarjeta.id && (
                   <motion.div
@@ -187,7 +176,6 @@ export default function Tarjetas() {
                   </motion.div>
                 )}
               </AnimatePresence>
-
             </div>
           ))}
         </div>

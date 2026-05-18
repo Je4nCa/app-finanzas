@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Users } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { gastosFijosRepository } from '@/repositories'
 import { CATEGORIAS } from '@/constants/categorias'
 import { calcularPartes } from '@/services/compartido.service'
 import { cn } from '@/lib/utils'
-import type { CategoriaId, GastoFijo, Moneda } from '@/types'
+import type { CategoriaId, GastoFijo, Moneda, TarjetaCredito, Usuario } from '@/types'
 import { TipoRecurrencia, TipoGastoCompartido } from '@/types'
 
 interface Campos {
@@ -69,8 +69,8 @@ function camposDesde(g: GastoFijo): Campos {
 }
 
 export default function FormularioGastoFijo({ gastoFijoInicial, onGuardado, onCancelar }: Props) {
-  const tarjetas = useLiveQuery(() => db.tarjetas.toArray(), [])
-  const usuarios = useLiveQuery(() => db.usuarios.toArray(), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const usuarios = useCollection<Usuario>(() => hCol('usuarios'), [])
 
   const [form, setForm] = useState<Campos>(() =>
     gastoFijoInicial ? camposDesde(gastoFijoInicial) : { ...INICIAL, usuarioId: '' }

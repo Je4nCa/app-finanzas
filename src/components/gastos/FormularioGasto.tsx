@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Users } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { gastosRepository } from '@/repositories'
 import { CATEGORIAS } from '@/constants/categorias'
 import { calcularPartes } from '@/services/compartido.service'
 import { useMonedaStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { CategoriaId, Gasto, Moneda } from '@/types'
+import type { CategoriaId, Gasto, Moneda, TarjetaCredito, Usuario } from '@/types'
 import { TipoGastoCompartido } from '@/types'
 
 interface Campos {
@@ -68,8 +68,8 @@ function camposDesde(g: Gasto): Campos {
 }
 
 export default function FormularioGasto({ gastoInicial, onGuardado, onCancelar }: Props) {
-  const tarjetas   = useLiveQuery(() => db.tarjetas.toArray(), [])
-  const usuarios   = useLiveQuery(() => db.usuarios.toArray(), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const usuarios = useCollection<Usuario>(() => hCol('usuarios'), [])
   const tipoCambio = useMonedaStore((s) => s.tipoCambio)
 
   const [form, setForm] = useState<Campos>(() =>

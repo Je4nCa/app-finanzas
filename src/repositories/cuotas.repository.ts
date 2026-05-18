@@ -1,66 +1,58 @@
-import { db } from '@/database/db'
+import { writeBatch } from 'firebase/firestore'
+import { firestore, hDoc } from '@/lib/firebase'
 import type { PlanCuotas, CuotaMensual, ID } from '@/types'
 import { EstadoCuota } from '@/types'
 import { BaseRepository } from './base.repository'
 
 class PlanesCuotasRepository extends BaseRepository<PlanCuotas> {
-  constructor() {
-    super(db.planesCuotas)
+  constructor() { super('planesCuotas') }
+
+  async obtenerPorTarjeta(tarjetaId: ID): Promise<PlanCuotas[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((p) => p.tarjetaId === tarjetaId)
   }
 
-  obtenerPorTarjeta(tarjetaId: ID): Promise<PlanCuotas[]> {
-    return this.tabla.where('tarjetaId').equals(tarjetaId).toArray()
-  }
-
-  obtenerPorUsuario(usuarioId: ID): Promise<PlanCuotas[]> {
-    return this.tabla.where('usuarioId').equals(usuarioId).toArray()
+  async obtenerPorUsuario(usuarioId: ID): Promise<PlanCuotas[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((p) => p.usuarioId === usuarioId)
   }
 }
 
 class CuotasMensualesRepository extends BaseRepository<CuotaMensual> {
-  constructor() {
-    super(db.cuotasMensuales)
+  constructor() { super('cuotasMensuales') }
+
+  async obtenerPorPeriodo(anio: number, mes: number): Promise<CuotaMensual[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((c) => c.anio === anio && c.mes === mes)
   }
 
-  /** Cuotas activas para un mes — las que aparecen en dashboards y totales de tarjeta */
-  obtenerPorPeriodo(anio: number, mes: number): Promise<CuotaMensual[]> {
-    return this.tabla.where('[anio+mes]').equals([anio, mes]).toArray()
-  }
-
-  obtenerPorPlan(planCuotasId: ID): Promise<CuotaMensual[]> {
-    return this.tabla
-      .where('planCuotasId')
-      .equals(planCuotasId)
-      .sortBy('numeroCuota')
+  async obtenerPorPlan(planCuotasId: ID): Promise<CuotaMensual[]> {
+    const todos = await this.obtenerTodos()
+    return todos
+      .filter((c) => c.planCuotasId === planCuotasId)
+      .sort((a, b) => a.numeroCuota - b.numeroCuota)
   }
 
   actualizarEstado(id: ID, estado: EstadoCuota): Promise<void> {
     return this.actualizar(id, { estado })
   }
 
-  obtenerPendientesPorPeriodo(anio: number, mes: number): Promise<CuotaMensual[]> {
-    return this.tabla
-      .where('[anio+mes]')
-      .equals([anio, mes])
-      .filter((c) => c.estado === EstadoCuota.Pendiente)
-      .toArray()
+  async obtenerPendientesPorPeriodo(anio: number, mes: number): Promise<CuotaMensual[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter(
+      (c) => c.anio === anio && c.mes === mes && c.estado === EstadoCuota.Pendiente
+    )
   }
 }
 
-/**
- * Crea un PlanCuotas junto con todas sus CuotaMensual en una sola transacción.
- * Las cuotas se generan automáticamente mes a mes desde fechaInicio.
- */
-async function crearPlanConCuotas(
-  plan: PlanCuotas,
-  cuotas: CuotaMensual[]
-): Promise<void> {
-  await db.transaction('rw', db.planesCuotas, db.cuotasMensuales, async () => {
-    await db.planesCuotas.add(plan)
-    await db.cuotasMensuales.bulkAdd(cuotas)
-  })
+export async function crearPlanConCuotas(plan: PlanCuotas, cuotas: CuotaMensual[]): Promise<void> {
+  const batch = writeBatch(firestore)
+  batch.set(hDoc('planesCuotas', plan.id), plan as Record<string, unknown>)
+  cuotas.forEach((c) =>
+    batch.set(hDoc('cuotasMensuales', c.id), c as Record<string, unknown>)
+  )
+  await batch.commit()
 }
 
-export const planesCuotasRepository = new PlanesCuotasRepository()
+export const planesCuotasRepository   = new PlanesCuotasRepository()
 export const cuotasMensualesRepository = new CuotasMensualesRepository()
-export { crearPlanConCuotas }

@@ -1,11 +1,9 @@
-import { db } from '@/database/db'
+import { writeBatch } from 'firebase/firestore'
+import { firestore, hDoc } from '@/lib/firebase'
+import { cuotasMensualesRepository } from '@/repositories'
 import { EstadoCuota } from '@/types'
 import type { PlanCuotas, CuotaMensual, ID } from '@/types'
 
-/**
- * Genera N registros CuotaMensual a partir de un PlanCuotas.
- * Las cuotas avanzan mes a mes desde fechaInicio.
- */
 export function generarCuotas(plan: PlanCuotas): CuotaMensual[] {
   const [anioInicio, mesInicio] = plan.fechaInicio.split('-').map(Number)
   const cuotas: CuotaMensual[] = []
@@ -28,15 +26,14 @@ export function generarCuotas(plan: PlanCuotas): CuotaMensual[] {
   return cuotas
 }
 
-/** Elimina el plan y todas sus cuotas en una sola transacción. */
 export async function eliminarPlanConCuotas(planId: ID): Promise<void> {
-  await db.transaction('rw', db.planesCuotas, db.cuotasMensuales, async () => {
-    await db.cuotasMensuales.where('planCuotasId').equals(planId).delete()
-    await db.planesCuotas.delete(planId)
-  })
+  const cuotas = await cuotasMensualesRepository.obtenerPorPlan(planId)
+  const batch  = writeBatch(firestore)
+  cuotas.forEach((c) => batch.delete(hDoc('cuotasMensuales', c.id)))
+  batch.delete(hDoc('planesCuotas', planId))
+  await batch.commit()
 }
 
-/** Devuelve el estado efectivo de una cuota — marca como vencida si el mes ya pasó. */
 export function estadoEfectivo(cuota: CuotaMensual): EstadoCuota {
   if (cuota.estado !== EstadoCuota.Pendiente) return cuota.estado
   const hoy = new Date()

@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { gastosRepository, gastosFijosRepository } from '@/repositories'
 import { useGastosStore } from '@/store'
 import { CATEGORIA_MAP } from '@/constants/categorias'
@@ -42,12 +42,17 @@ export default function Gastos() {
   const mostrarFormGasto = panelGasto.tipo !== 'ninguno'
   const mostrarFormFijo  = panelFijo.tipo  !== 'ninguno'
 
-  const prefijo = `${anio}-${String(mes).padStart(2, '0')}`
-  const gastos = useLiveQuery(
-    () => db.gastos.where('fecha').startsWith(prefijo).reverse().toArray(),
-    [prefijo]
+  const prefijo      = `${anio}-${String(mes).padStart(2, '0')}`
+  const todosGastos      = useCollection<Gasto>(() => hCol('gastos'), [])
+  const todosGastosFijos = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
+
+  const gastos = useMemo(
+    () => todosGastos
+      ?.filter((g) => g.fecha.startsWith(prefijo))
+      .sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [todosGastos, prefijo]
   )
-  const gastosFijos = useLiveQuery(() => db.gastosFijos.toArray(), [])
+  const gastosFijos = useMemo(() => todosGastosFijos, [todosGastosFijos])
 
   async function handleEliminarGasto(id: string) {
     await gastosRepository.eliminar(id)

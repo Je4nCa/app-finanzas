@@ -1,15 +1,15 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-import { tarjetasRepository } from '@/repositories'
+import { useMemo } from 'react'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
+import type { TarjetaCredito } from '@/types'
 
 export function useTarjetas() {
-  const tarjetas = useLiveQuery(() => tarjetasRepository.obtenerTodas(), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
   return { tarjetas: tarjetas ?? [] }
 }
 
 export function useTarjeta(id: string | undefined) {
-  const tarjeta = useLiveQuery(
-    () => (id ? tarjetasRepository.obtenerPorId(id) : undefined),
-    [id]
-  )
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const tarjeta  = useMemo(() => tarjetas?.find((t) => t.id === id), [tarjetas, id])
   return { tarjeta }
 }

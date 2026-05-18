@@ -1,32 +1,35 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useEffect } from 'react'
 import { calcularTotalMensual, calcularTotalTodasLasTarjetas } from '@/services/tarjeta.service'
 import { useMonedaStore } from '@/store'
 import type { ID, PeriodoMensual } from '@/types'
+import type { TotalMensualTarjeta } from '@/services/tarjeta.service'
 
-/** Total mensual de una tarjeta específica, se recalcula al cambiar IndexedDB */
 export function useTotalMensualTarjeta(tarjetaId: ID | undefined, periodo: PeriodoMensual) {
   const tipoCambio = useMonedaStore((s) => s.tipoCambio)
+  const [resultado, setResultado] = useState<TotalMensualTarjeta | undefined>(undefined)
 
-  const resultado = useLiveQuery(
-    () =>
-      tarjetaId
-        ? calcularTotalMensual(tarjetaId, periodo, tipoCambio)
-        : undefined,
-    [tarjetaId, periodo.anio, periodo.mes, tipoCambio]
-  )
+  useEffect(() => {
+    if (!tarjetaId) return
+    calcularTotalMensual(tarjetaId, periodo, tipoCambio)
+      .then(setResultado)
+      .catch(console.error)
+  }, [tarjetaId, periodo.anio, periodo.mes, tipoCambio])
 
   return resultado
 }
 
-/** Totales de todas las tarjetas + gran total en moneda base */
 export function useTotalTodasLasTarjetas(periodo: PeriodoMensual) {
-  const tipoCambio  = useMonedaStore((s) => s.tipoCambio)
-  const monedaBase  = useMonedaStore((s) => s.monedaBase)
+  const tipoCambio = useMonedaStore((s) => s.tipoCambio)
+  const monedaBase = useMonedaStore((s) => s.monedaBase)
+  const [resultado, setResultado] = useState<
+    { porTarjeta: TotalMensualTarjeta[]; granTotal: number } | undefined
+  >(undefined)
 
-  const resultado = useLiveQuery(
-    () => calcularTotalTodasLasTarjetas(periodo, tipoCambio, monedaBase),
-    [periodo.anio, periodo.mes, tipoCambio, monedaBase]
-  )
+  useEffect(() => {
+    calcularTotalTodasLasTarjetas(periodo, tipoCambio, monedaBase)
+      .then(setResultado)
+      .catch(console.error)
+  }, [periodo.anio, periodo.mes, tipoCambio, monedaBase])
 
   return resultado
 }

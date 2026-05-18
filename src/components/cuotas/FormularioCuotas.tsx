@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Users } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { crearPlanConCuotas } from '@/repositories'
 import { generarCuotas, labelMes } from '@/services/cuotas.service'
 import { calcularPartes } from '@/services/compartido.service'
 import { cn } from '@/lib/utils'
-import type { Moneda } from '@/types'
+import type { Moneda, TarjetaCredito, Usuario } from '@/types'
 import { TipoGastoCompartido } from '@/types'
 
 const PRESETS_CUOTAS = [3, 6, 12, 18, 24]
@@ -25,7 +25,11 @@ interface Campos {
   porcentajeMio: number
 }
 
-const hoyMes = new Date().toISOString().slice(0, 7)
+function mesHoyLocal(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+const hoyMes = mesHoyLocal()
 
 const INICIAL: Campos = {
   nombreProducto: '',
@@ -46,8 +50,8 @@ interface Props {
 }
 
 export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
-  const tarjetas = useLiveQuery(() => db.tarjetas.toArray(), [])
-  const usuarios = useLiveQuery(() => db.usuarios.toArray(), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const usuarios = useCollection<Usuario>(() => hCol('usuarios'), [])
 
   const [form, setForm] = useState<Campos>({ ...INICIAL, usuarioId: '' })
   const [guardando, setGuardando] = useState(false)

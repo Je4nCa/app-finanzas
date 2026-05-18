@@ -1,19 +1,16 @@
-import { db } from '@/database/db'
 import type { Usuario } from '@/types'
 import { BaseRepository } from './base.repository'
 
 class UsuariosRepository extends BaseRepository<Usuario> {
-  constructor() {
-    super(db.usuarios)
-  }
+  constructor() { super('usuarios') }
 
-  /** Devuelve los dos perfiles (yo + pareja) ordenados por fecha de creación */
-  obtenerPareja(): Promise<Usuario[]> {
-    return this.tabla.orderBy('creadoEn').toArray()
+  async obtenerPareja(): Promise<Usuario[]> {
+    const todos = await this.obtenerTodos()
+    return todos.sort((a, b) => a.creadoEn.localeCompare(b.creadoEn))
   }
 
   obtenerPorId(id: string): Promise<Usuario | undefined> {
-    return this.tabla.get(id)
+    return super.obtenerPorId(id)
   }
 }
 

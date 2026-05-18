@@ -1,24 +1,16 @@
-import { db } from '@/database/db'
 import type { TarjetaCredito, ID } from '@/types'
+import { BaseRepository } from './base.repository'
 
-export const tarjetasRepository = {
-  crear(tarjeta: TarjetaCredito): Promise<ID> {
-    return db.tarjetas.add(tarjeta)
-  },
-
-  obtenerPorId(id: ID): Promise<TarjetaCredito | undefined> {
-    return db.tarjetas.get(id)
-  },
+class TarjetasRepository extends BaseRepository<TarjetaCredito> {
+  constructor() { super('tarjetas') }
 
   obtenerTodas(): Promise<TarjetaCredito[]> {
-    return db.tarjetas.toArray()
-  },
+    return this.obtenerTodos()
+  }
 
-  actualizar(id: ID, cambios: Partial<TarjetaCredito>): Promise<number> {
-    return db.tarjetas.update(id, cambios)
-  },
-
-  eliminar(id: ID): Promise<void> {
-    return db.tarjetas.delete(id)
-  },
+  obtenerPorId(id: ID): Promise<TarjetaCredito | undefined> {
+    return super.obtenerPorId(id)
+  }
 }
+
+export const tarjetasRepository = new TarjetasRepository()

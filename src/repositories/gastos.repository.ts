@@ -1,29 +1,22 @@
-import { db } from '@/database/db'
 import type { Gasto, ID } from '@/types'
+import { BaseRepository } from './base.repository'
 
-export const gastosRepository = {
-  crear(gasto: Gasto): Promise<ID> {
-    return db.gastos.add(gasto)
-  },
+class GastosRepository extends BaseRepository<Gasto> {
+  constructor() { super('gastos') }
 
-  obtenerPorId(id: ID): Promise<Gasto | undefined> {
-    return db.gastos.get(id)
-  },
-
-  obtenerTodos(): Promise<Gasto[]> {
-    return db.gastos.toArray()
-  },
-
-  obtenerPorPeriodo(anio: number, mes: number): Promise<Gasto[]> {
+  async obtenerPorPeriodo(anio: number, mes: number): Promise<Gasto[]> {
     const prefijo = `${anio}-${String(mes).padStart(2, '0')}`
-    return db.gastos.where('fecha').startsWith(prefijo).toArray()
-  },
+    const todos = await this.obtenerTodos()
+    return todos.filter((g) => g.fecha.startsWith(prefijo))
+  }
 
-  actualizar(id: ID, cambios: Partial<Gasto>): Promise<number> {
-    return db.gastos.update(id, cambios)
-  },
+  actualizar(id: ID, cambios: Partial<Gasto>): Promise<void> {
+    return super.actualizar(id, cambios)
+  }
 
   eliminar(id: ID): Promise<void> {
-    return db.gastos.delete(id)
-  },
+    return super.eliminar(id)
+  }
 }
+
+export const gastosRepository = new GastosRepository()

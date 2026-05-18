@@ -1,12 +1,6 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-import { tipoCambioRepository } from '@/repositories'
-import { TIPO_CAMBIO_DEFAULT } from '@/constants/moneda'
+import { useMonedaStore } from '@/store'
 
 export function useTipoCambioActual() {
-  const tipoCambio = useLiveQuery(() => tipoCambioRepository.obtenerUltimo(), [])
-
-  return {
-    tipoCambio: tipoCambio?.usdACrc ?? TIPO_CAMBIO_DEFAULT,
-    registro: tipoCambio,
-  }
+  const tipoCambio = useMonedaStore((s) => s.tipoCambio)
+  return { tipoCambio }
 }

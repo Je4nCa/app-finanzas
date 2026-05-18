@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, ChevronDown, Trash2, CheckCircle2, Circle, AlertCircle } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { cuotasMensualesRepository } from '@/repositories'
 import { eliminarPlanConCuotas, estadoEfectivo, labelMes } from '@/services/cuotas.service'
 import { EstadoCuota } from '@/types'
@@ -16,8 +16,8 @@ export default function TasaCero() {
   const [expandidoId, setExpandidoId]         = useState<string | null>(null)
   const [eliminandoId, setEliminandoId]       = useState<string | null>(null)
 
-  const planes   = useLiveQuery(() => db.planesCuotas.toArray(), [])
-  const tarjetas = useLiveQuery(() => db.tarjetas.toArray(), [])
+  const planes   = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
+  const tarjetas = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
 
   const tarjetaMap = Object.fromEntries((tarjetas ?? []).map((t) => [t.id, t])) as Record<string, TarjetaCredito>
 
@@ -121,9 +121,13 @@ function PlanCard({
   expandido, eliminando,
   onToggleExpand, onEliminar, onConfirmarEliminar, onCancelarEliminar,
 }: PlanCardProps) {
-  const cuotas = useLiveQuery(
-    () => db.cuotasMensuales.where('planCuotasId').equals(plan.id).sortBy('numeroCuota'),
-    [plan.id]
+  const todasCuotas = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
+  const cuotas = useMemo(
+    () =>
+      todasCuotas
+        ?.filter((c) => c.planCuotasId === plan.id)
+        .sort((a, b) => a.numeroCuota - b.numeroCuota),
+    [todasCuotas, plan.id]
   )
 
   const pagadas  = cuotas?.filter((c) => c.estado === EstadoCuota.Pagada).length ?? 0

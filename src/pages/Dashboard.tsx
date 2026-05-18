@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow } from 'lucide-react'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { useMonedaStore, useUsuarioStore } from '@/store'
 import { calcularPartes } from '@/services/compartido.service'
 import { EstadoCuota } from '@/types'
@@ -105,29 +105,24 @@ export default function Dashboard() {
 
   const prefijo = `${periodo.anio}-${String(periodo.mes).padStart(2, '0')}`
 
-  // Gastos variables del mes
-  const gastos = useLiveQuery(
-    () => db.gastos.where('fecha').startsWith(prefijo).toArray(),
-    [prefijo]
-  )
+  const todosGastos    = useCollection<Gasto>(() => hCol('gastos'), [])
+  const todosGastosFijos = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
+  const todasCuotas    = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
+  const planes         = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
+  const usuarios       = useCollection<Usuario>(() => hCol('usuarios'), [])
 
-  // Gastos fijos activos — usa filter() para evitar problemas con boolean en Dexie
-  const gastosFijos = useLiveQuery(
-    () => db.gastosFijos.filter((f) => f.activo).toArray(),
-    []
+  const gastos = useMemo(
+    () => todosGastos?.filter((g) => g.fecha.startsWith(prefijo)),
+    [todosGastos, prefijo]
   )
-
-  // Cuotas del mes usando el índice compuesto [anio+mes]
-  const cuotas = useLiveQuery(
-    () => db.cuotasMensuales
-      .where('[anio+mes]')
-      .equals([periodo.anio, periodo.mes])
-      .toArray(),
-    [periodo.anio, periodo.mes]
+  const gastosFijos = useMemo(
+    () => todosGastosFijos?.filter((f) => f.activo),
+    [todosGastosFijos]
   )
-
-  const planes   = useLiveQuery(() => db.planesCuotas.toArray(), [])
-  const usuarios = useLiveQuery(() => db.usuarios.toArray(), [])
+  const cuotas = useMemo(
+    () => todasCuotas?.filter((c) => c.anio === periodo.anio && c.mes === periodo.mes),
+    [todasCuotas, periodo.anio, periodo.mes]
+  )
 
   const totales = useMemo(() => {
     if (!gastos || !cuotas || !planes || !gastosFijos || !usuarios) return null

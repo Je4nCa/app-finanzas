@@ -1,12 +1,12 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { db } from '@/database/db'
+import { useCollection } from '@/hooks/useCollection'
+import { hCol } from '@/lib/firebase'
 import { useUsuarioStore } from '@/store'
 import type { Usuario } from '@/types'
 
 export default function SeleccionUsuario() {
-  const usuarios = useLiveQuery(() => db.usuarios.toArray(), [])
+  const usuarios = useCollection<Usuario>(() => hCol('usuarios'), [])
   const setUsuarioActivo = useUsuarioStore((s) => s.setUsuarioActivo)
   const navigate = useNavigate()
 

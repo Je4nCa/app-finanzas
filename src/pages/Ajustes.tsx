@@ -1,5 +1,7 @@
 import { RefreshCw, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { signOut } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import { useMonedaStore, useUsuarioStore } from '@/store'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
@@ -145,6 +147,20 @@ export default function Ajustes() {
         <p className="text-[11px] text-muted-foreground px-1 leading-relaxed">
           Tasa de mercado de referencia. Casas de cambio como Ari App pueden aplicar un diferencial.
         </p>
+      </section>
+
+      {/* ── Cuenta Google ─── */}
+      <section className="flex flex-col gap-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Cuenta
+        </p>
+        <button
+          onClick={() => signOut(auth)}
+          className="flex items-center gap-3 h-12 px-4 rounded-2xl bg-card border border-border text-sm text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+        >
+          <LogOut size={16} />
+          Cerrar sesión de Google
+        </button>
       </section>
 
     </PageWrapper>

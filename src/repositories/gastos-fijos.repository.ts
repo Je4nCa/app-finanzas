@@ -1,26 +1,22 @@
-import { db } from '@/database/db'
 import type { GastoFijo, ID } from '@/types'
 import { BaseRepository } from './base.repository'
 
 class GastosFijosRepository extends BaseRepository<GastoFijo> {
-  constructor() {
-    super(db.gastosFijos)
+  constructor() { super('gastosFijos') }
+
+  async obtenerActivos(): Promise<GastoFijo[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((g) => g.activo)
   }
 
-  obtenerActivos(): Promise<GastoFijo[]> {
-    return this.tabla.where('activo').equals(1).toArray()
+  async obtenerPorUsuario(usuarioId: ID): Promise<GastoFijo[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((g) => g.usuarioId === usuarioId)
   }
 
-  obtenerPorUsuario(usuarioId: ID): Promise<GastoFijo[]> {
-    return this.tabla.where('usuarioId').equals(usuarioId).toArray()
-  }
-
-  obtenerActivosPorUsuario(usuarioId: ID): Promise<GastoFijo[]> {
-    return this.tabla
-      .where('usuarioId')
-      .equals(usuarioId)
-      .filter((g) => g.activo)
-      .toArray()
+  async obtenerActivosPorUsuario(usuarioId: ID): Promise<GastoFijo[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((g) => g.activo && g.usuarioId === usuarioId)
   }
 }
 

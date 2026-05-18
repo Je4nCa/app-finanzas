@@ -1,33 +1,24 @@
-import { db } from '@/database/db'
 import type { Balance, ID } from '@/types'
 import { BaseRepository } from './base.repository'
 
 class BalancesRepository extends BaseRepository<Balance> {
-  constructor() {
-    super(db.balances)
+  constructor() { super('balances') }
+
+  async obtenerPorPeriodo(anio: number, mes: number): Promise<Balance[]> {
+    const todos = await this.obtenerTodos()
+    return todos.filter((b) => b.anio === anio && b.mes === mes)
   }
 
-  obtenerPorPeriodo(anio: number, mes: number): Promise<Balance[]> {
-    return this.tabla.where('[anio+mes]').equals([anio, mes]).toArray()
+  async obtenerPorUsuarioYPeriodo(usuarioId: ID, anio: number, mes: number): Promise<Balance | undefined> {
+    const todos = await this.obtenerTodos()
+    return todos.find((b) => b.usuarioId === usuarioId && b.anio === anio && b.mes === mes)
   }
 
-  obtenerPorUsuarioYPeriodo(
-    usuarioId: ID,
-    anio: number,
-    mes: number
-  ): Promise<Balance | undefined> {
-    return this.tabla
-      .where('[anio+mes]')
-      .equals([anio, mes])
+  async obtenerHistoricoPorUsuario(usuarioId: ID): Promise<Balance[]> {
+    const todos = await this.obtenerTodos()
+    return todos
       .filter((b) => b.usuarioId === usuarioId)
-      .first()
-  }
-
-  obtenerHistoricoPorUsuario(usuarioId: ID): Promise<Balance[]> {
-    return this.tabla
-      .where('usuarioId')
-      .equals(usuarioId)
-      .sortBy('anio')
+      .sort((a, b) => a.anio - b.anio || a.mes - b.mes)
   }
 }
 
