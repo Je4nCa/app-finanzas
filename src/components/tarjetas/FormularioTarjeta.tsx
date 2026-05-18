@@ -52,6 +52,7 @@ export default function FormularioTarjeta({ tarjetaInicial, onGuardado, onCancel
 
   const [form, setForm] = useState<CamposFormulario>(() => camposDesde(tarjetaInicial))
   const [guardando, setGuardando] = useState(false)
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
   const [errores, setErrores] = useState<Partial<Record<keyof CamposFormulario, string>>>({})
 
   function set<K extends keyof CamposFormulario>(campo: K, valor: CamposFormulario[K]) {
@@ -102,6 +103,9 @@ export default function FormularioTarjeta({ tarjetaInicial, onGuardado, onCancel
         } as TarjetaCredito)
       }
       onGuardado()
+    } catch (err) {
+      console.error('[FormularioTarjeta] error al guardar:', err)
+      setErrorGuardar('No se pudo guardar. Intentá de nuevo.')
     } finally {
       setGuardando(false)
     }
@@ -259,6 +263,9 @@ export default function FormularioTarjeta({ tarjetaInicial, onGuardado, onCancel
           {guardando ? 'Guardando…' : modoEdicion ? 'Actualizar' : 'Guardar tarjeta'}
         </button>
       </div>
+      {errorGuardar && (
+        <p className="text-sm text-destructive text-center py-1">{errorGuardar}</p>
+      )}
     </motion.form>
   )
 }

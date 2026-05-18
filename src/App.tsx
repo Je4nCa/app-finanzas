@@ -5,6 +5,7 @@ import { router } from '@/router'
 import ThemeProvider from '@/providers/ThemeProvider'
 import { useMonedaStore } from '@/store'
 import { auth } from '@/lib/firebase'
+import { seedFirestoreIfEmpty } from '@/lib/seedFirestore'
 import Login from '@/pages/Login'
 
 const ALLOWED_EMAILS = ['jeancarlo2722@gmail.com', 'jazminsalaso05@gmail.com']
@@ -21,7 +22,10 @@ function AppInit() {
   }, [])
 
   useEffect(() => {
-    if (authUser) fetchTipoCambio()
+    if (authUser) {
+      fetchTipoCambio()
+      seedFirestoreIfEmpty().catch(console.error)
+    }
   }, [authUser, fetchTipoCambio])
 
   // Still loading auth state

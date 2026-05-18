@@ -76,6 +76,7 @@ export default function FormularioGastoFijo({ gastoFijoInicial, onGuardado, onCa
     gastoFijoInicial ? camposDesde(gastoFijoInicial) : { ...INICIAL, usuarioId: '' }
   )
   const [guardando, setGuardando] = useState(false)
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
   const [errores, setErrores] = useState<Partial<Record<keyof Campos, string>>>({})
 
   function set<K extends keyof Campos>(campo: K, valor: Campos[K]) {
@@ -159,6 +160,9 @@ export default function FormularioGastoFijo({ gastoFijoInicial, onGuardado, onCa
         await gastosFijosRepository.crear(gasto)
       }
       onGuardado()
+    } catch (err) {
+      console.error('[FormularioGastoFijo] error al guardar:', err)
+      setErrorGuardar('No se pudo guardar. Intentá de nuevo.')
     } finally {
       setGuardando(false)
     }
@@ -463,6 +467,9 @@ export default function FormularioGastoFijo({ gastoFijoInicial, onGuardado, onCa
           {guardando ? 'Guardando…' : gastoFijoInicial ? 'Guardar cambios' : 'Agregar fijo'}
         </button>
       </div>
+      {errorGuardar && (
+        <p className="text-sm text-destructive text-center py-1">{errorGuardar}</p>
+      )}
     </motion.form>
   )
 }

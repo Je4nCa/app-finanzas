@@ -55,6 +55,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
 
   const [form, setForm] = useState<Campos>({ ...INICIAL, usuarioId: '' })
   const [guardando, setGuardando] = useState(false)
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
   const [errores, setErrores] = useState<Partial<Record<keyof Campos, string>>>({})
 
   function set<K extends keyof Campos>(campo: K, valor: Campos[K]) {
@@ -135,6 +136,9 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
       const cuotas = generarCuotas(plan)
       await crearPlanConCuotas(plan, cuotas)
       onGuardado()
+    } catch (err) {
+      console.error('[FormularioCuotas] error al guardar:', err)
+      setErrorGuardar('No se pudo crear el plan. Intentá de nuevo.')
     } finally {
       setGuardando(false)
     }
@@ -349,6 +353,9 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
           {guardando ? 'Creando…' : 'Crear plan'}
         </button>
       </div>
+      {errorGuardar && (
+        <p className="text-sm text-destructive text-center py-1">{errorGuardar}</p>
+      )}
     </motion.form>
   )
 }
