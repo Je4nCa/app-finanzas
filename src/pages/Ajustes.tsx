@@ -20,7 +20,8 @@ export default function Ajustes() {
   const navigate = useNavigate()
 
   const {
-    tipoCambio, ultimaActualizacion, cargandoTipoCambio, fetchTipoCambio,
+    tipoCambioCompra, tipoCambioVenta, fuenteTipoCambio,
+    ultimaActualizacion, cargandoTipoCambio, fetchTipoCambio,
     monedaBase, setMonedaBase,
   } = useMonedaStore()
 
@@ -111,22 +112,34 @@ export default function Ajustes() {
         </p>
 
         <div className="rounded-2xl bg-card border border-border p-4 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">1 USD =</p>
-              <p className="text-3xl font-bold tabular-nums">
-                {cargandoTipoCambio
-                  ? <span className="text-muted-foreground text-2xl">Actualizando…</span>
-                  : <>₡{tipoCambio.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
-                }
-              </p>
+          {/* Compra / Venta */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex gap-6">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Compra</p>
+                <p className="text-2xl font-bold tabular-nums">
+                  {cargandoTipoCambio
+                    ? <span className="text-muted-foreground text-xl">…</span>
+                    : <>₡{tipoCambioCompra.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
+                  }
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Venta</p>
+                <p className="text-2xl font-bold tabular-nums">
+                  {cargandoTipoCambio
+                    ? <span className="text-muted-foreground text-xl">…</span>
+                    : <>₡{tipoCambioVenta.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
+                  }
+                </p>
+              </div>
             </div>
 
             <button
               onClick={() => fetchTipoCambio()}
               disabled={cargandoTipoCambio}
               className={cn(
-                'w-11 h-11 flex items-center justify-center rounded-xl border border-border',
+                'w-11 h-11 flex items-center justify-center rounded-xl border border-border shrink-0',
                 'text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors',
                 'disabled:opacity-40 disabled:cursor-not-allowed'
               )}
@@ -137,15 +150,17 @@ export default function Ajustes() {
           </div>
 
           <div className="flex flex-col gap-1.5 pt-3 border-t border-border">
-            <Row label="Fuente"                valor="Open Exchange Rates" />
-            <Row label="Referencia"            valor="Mercado (base BCCR)" />
-            <Row label="Última actualización"  valor={tiempoRelativo(ultimaActualizacion)} />
-            <Row label="Actualización auto."   valor="Cada hora al abrir la app" />
+            <Row label="Fuente"               valor="ARI Casa de Cambio — BCCR Ventanilla" />
+            <Row label="Última actualización" valor={tiempoRelativo(ultimaActualizacion)} />
+            <Row label="Actualización auto."  valor="1 vez al día (9 AM)" />
+            {fuenteTipoCambio && fuenteTipoCambio.includes('estimado') && (
+              <p className="text-[11px] text-amber-500 mt-1">Sin conexión — usando valores estimados</p>
+            )}
           </div>
         </div>
 
         <p className="text-[11px] text-muted-foreground px-1 leading-relaxed">
-          Tasa de mercado de referencia. Casas de cambio como Ari App pueden aplicar un diferencial.
+          Compra: colones que recibís al vender USD. Venta: colones que pagás al comprar USD.
         </p>
       </section>
 

@@ -1,17 +1,21 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { TIPO_CAMBIO_DEFAULT } from '@/constants/moneda'
+import { TIPO_CAMBIO_COMPRA_DEFAULT, TIPO_CAMBIO_VENTA_DEFAULT } from '@/constants/moneda'
 import { obtenerTipoCambio } from '@/services/tipoCambio.service'
 import type { Moneda } from '@/types'
 
 interface MonedaStore {
-  monedaBase: Moneda
-  tipoCambio: number
-  ultimaActualizacion: number   // timestamp ms, 0 = nunca
-  cargandoTipoCambio: boolean
+  monedaBase:          Moneda
+  tipoCambioCompra:    number   // ARI compra USD — para CRC → USD
+  tipoCambioVenta:     number   // ARI vende USD  — para USD → CRC
+  /** Alias de venta — mantiene compatibilidad con código existente */
+  tipoCambio:          number
+  fuenteTipoCambio:    string
+  ultimaActualizacion: number
+  cargandoTipoCambio:  boolean
   setMonedaBase: (moneda: Moneda) => void
-  setTipoCambio: (valor: number) => void
   fetchTipoCambio: () => Promise<void>
+  /** USD→CRC usa tasa venta; CRC→USD usa tasa compra */
   convertir: (monto: number, de: Moneda, a: Moneda) => number
 }
 
@@ -19,25 +23,28 @@ export const useMonedaStore = create<MonedaStore>()(
   devtools(
     persist(
       (set, get) => ({
-        monedaBase: 'USD',
-        tipoCambio: TIPO_CAMBIO_DEFAULT,
+        monedaBase:          'USD',
+        tipoCambioCompra:    TIPO_CAMBIO_COMPRA_DEFAULT,
+        tipoCambioVenta:     TIPO_CAMBIO_VENTA_DEFAULT,
+        tipoCambio:          TIPO_CAMBIO_VENTA_DEFAULT,
+        fuenteTipoCambio:    '',
         ultimaActualizacion: 0,
-        cargandoTipoCambio: false,
+        cargandoTipoCambio:  false,
 
         setMonedaBase: (monedaBase) =>
           set({ monedaBase }, false, 'setMonedaBase'),
 
-        setTipoCambio: (tipoCambio) =>
-          set({ tipoCambio }, false, 'setTipoCambio'),
-
         fetchTipoCambio: async () => {
           set({ cargandoTipoCambio: true }, false, 'fetchTipoCambio/pending')
-          const resultado = await obtenerTipoCambio()
+          const r = await obtenerTipoCambio()
           set(
             {
-              tipoCambio: resultado.tipoCambio,
-              ultimaActualizacion: resultado.actualizadoEn,
-              cargandoTipoCambio: false,
+              tipoCambioCompra:    r.compra,
+              tipoCambioVenta:     r.venta,
+              tipoCambio:          r.venta,
+              fuenteTipoCambio:    r.fuente,
+              ultimaActualizacion: r.actualizadoEn,
+              cargandoTipoCambio:  false,
             },
             false,
             'fetchTipoCambio/fulfilled'
@@ -46,17 +53,22 @@ export const useMonedaStore = create<MonedaStore>()(
 
         convertir: (monto, de, a) => {
           if (de === a) return monto
-          const { tipoCambio } = get()
-          if (de === 'USD' && a === 'CRC') return monto * tipoCambio
-          if (de === 'CRC' && a === 'USD') return monto / tipoCambio
+          const { tipoCambioCompra, tipoCambioVenta } = get()
+          // USD → CRC: "¿cuántos colones necesito para comprar este monto en USD?" → tasa venta
+          if (de === 'USD' && a === 'CRC') return monto * tipoCambioVenta
+          // CRC → USD: "¿cuántos dólares obtengo vendiendo estos colones?" → tasa compra
+          if (de === 'CRC' && a === 'USD') return monto / tipoCambioCompra
           return monto
         },
       }),
       {
         name: 'moneda-config',
         partialize: (s) => ({
-          monedaBase: s.monedaBase,
-          tipoCambio: s.tipoCambio,
+          monedaBase:          s.monedaBase,
+          tipoCambioCompra:    s.tipoCambioCompra,
+          tipoCambioVenta:     s.tipoCambioVenta,
+          tipoCambio:          s.tipoCambio,
+          fuenteTipoCambio:    s.fuenteTipoCambio,
           ultimaActualizacion: s.ultimaActualizacion,
         }),
       }

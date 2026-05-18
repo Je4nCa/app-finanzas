@@ -2,7 +2,7 @@
 export type { ID, FechaISO, FechaHoraISO, PeriodoMensual, EstadoCarga, Paginacion, Resultado } from './comunes'
 
 // ─── Moneda ───────────────────────────────────────────────────────────────────
-export type { Moneda, TipoCambio, MontoConvertido } from './moneda'
+export type { Moneda, TipoCambio, TipoCambioARI, MontoConvertido } from './moneda'
 
 // ─── Categorías ───────────────────────────────────────────────────────────────
 export { TipoCategoria } from './categoria'
