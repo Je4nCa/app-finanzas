@@ -1,20 +1,20 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
-import { tarjetasRepository } from '@/repositories'
+import { tarjetasRepository, abonosTarjetaRepository } from '@/repositories'
 import { useMonedaStore } from '@/store'
 import { periodoFacturacion } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
+import { nanoid } from 'nanoid'
 import PageWrapper from '@components/ui/PageWrapper'
 import FormularioTarjeta from '@components/tarjetas/FormularioTarjeta'
-import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas } from '@/types'
+import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas, AbonoTarjeta, Moneda } from '@/types'
 
 const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
 function fmtFecha(iso: string): string {
-  // iso = YYYY-MM-DD
   const [, mm, dd] = iso.split('-')
   return `${parseInt(dd)} ${MESES_CORTO[parseInt(mm) - 1]}`
 }
@@ -56,6 +56,111 @@ function SaldoDebito({ tarjeta, gastos }: { tarjeta: TarjetaCredito; gastos: Gas
   )
 }
 
+// ─── Abono mini-form ──────────────────────────────────────────────────────────
+
+interface FormAbonoProps {
+  tarjeta: TarjetaCredito
+  periodo: { anio: number; mes: number }
+  onGuardado: () => void
+  onCancelar: () => void
+}
+
+function FormAbono({ tarjeta, periodo, onGuardado, onCancelar }: FormAbonoProps) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const [monto, setMonto] = useState('')
+  const [fecha, setFecha] = useState(hoy)
+  const [notas, setNotas] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const montoNum = parseFloat(monto.replace(/,/g, ''))
+    if (!montoNum || montoNum <= 0) { setError('Ingresa un monto válido'); return }
+    if (!fecha) { setError('Selecciona una fecha'); return }
+
+    setGuardando(true)
+    setError(null)
+    try {
+      const abono: AbonoTarjeta = {
+        id: nanoid(),
+        tarjetaId: tarjeta.id,
+        anio: periodo.anio,
+        mes: periodo.mes,
+        monto: montoNum,
+        moneda: tarjeta.moneda as Moneda,
+        fecha,
+        ...(notas.trim() ? { notas: notas.trim() } : {}),
+        creadoEn: new Date().toISOString(),
+      }
+      await abonosTarjetaRepository.crear(abono)
+      onGuardado()
+    } catch {
+      setError('No se pudo guardar. Intentá de nuevo.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const simbolo = tarjeta.moneda === 'USD' ? '$' : '₡'
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 pt-3 border-t border-border mt-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Registrar abono</p>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="text-xs text-muted-foreground">Monto ({simbolo})</label>
+          <input
+            type="number"
+            step="any"
+            min="0"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            placeholder="0"
+            className="w-full mt-1 h-9 px-3 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-xs text-muted-foreground">Fecha de pago</label>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            className="w-full mt-1 h-9 px-3 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground">Notas (opcional)</label>
+        <input
+          type="text"
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder="Pago mínimo, pago total..."
+          className="w-full mt-1 h-9 px-3 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="h-8 px-3 rounded-lg text-xs text-muted-foreground border border-border"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={guardando}
+          className="h-8 px-4 rounded-lg text-xs bg-primary text-primary-foreground font-semibold disabled:opacity-50"
+        >
+          {guardando ? 'Guardando…' : 'Guardar abono'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── Credit card billing summary ─────────────────────────────────────────────
 
 interface ResumenCreditoProps {
@@ -65,6 +170,7 @@ interface ResumenCreditoProps {
   gastosFijos: GastoFijo[]
   planesCuotas: PlanCuotas[]
   cuotasMensuales: CuotaMensual[]
+  abonos: AbonoTarjeta[]
   tipoCambio: number
 }
 
@@ -75,8 +181,12 @@ function ResumenCredito({
   gastosFijos,
   planesCuotas,
   cuotasMensuales,
+  abonos,
   tipoCambio,
 }: ResumenCreditoProps) {
+  const [mostrarFormAbono, setMostrarFormAbono] = useState(false)
+  const [eliminandoAbonoId, setEliminandoAbonoId] = useState<string | null>(null)
+
   const { desde, hasta } = periodoFacturacion(periodo.anio, periodo.mes, tarjeta.diaCierre ?? 1)
   const simbolo = tarjeta.moneda === 'USD' ? '$' : '₡'
 
@@ -86,18 +196,15 @@ function ResumenCredito({
     return monto / tipoCambio
   }
 
-  const { subtotalVar, subtotalFijos, subtotalCuotas, total } = useMemo(() => {
-    // Variables: in billing period
+  const { subtotalVar, subtotalFijos, subtotalCuotas, totalFacturado, totalAbonos, saldoPendiente } = useMemo(() => {
     const subtotalVar = gastos
       .filter((g) => g.tarjetaId === tarjeta.id && g.fecha >= desde && g.fecha <= hasta)
       .reduce((sum, g) => sum + conv(g.monto, g.moneda), 0)
 
-    // Fijos: activo only
     const subtotalFijos = gastosFijos
       .filter((g) => g.tarjetaId === tarjeta.id && g.activo)
       .reduce((sum, g) => sum + conv(g.monto, g.moneda), 0)
 
-    // Cuotas: plans belonging to this card, cuotas matching anio/mes
     const planIds = new Set(
       planesCuotas.filter((p) => p.tarjetaId === tarjeta.id).map((p) => p.id)
     )
@@ -108,16 +215,28 @@ function ResumenCredito({
         return sum + conv(c.monto, plan?.moneda ?? tarjeta.moneda)
       }, 0)
 
+    const totalFacturado = subtotalVar + subtotalFijos + subtotalCuotas
+
+    const totalAbonos = abonos
+      .filter((a) => a.tarjetaId === tarjeta.id && a.anio === periodo.anio && a.mes === periodo.mes)
+      .reduce((sum, a) => sum + conv(a.monto, a.moneda), 0)
+
     return {
       subtotalVar,
       subtotalFijos,
       subtotalCuotas,
-      total: subtotalVar + subtotalFijos + subtotalCuotas,
+      totalFacturado,
+      totalAbonos,
+      saldoPendiente: totalFacturado - totalAbonos,
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gastos, gastosFijos, planesCuotas, cuotasMensuales, tarjeta.id, desde, hasta, periodo.anio, periodo.mes, tipoCambio])
+  }, [gastos, gastosFijos, planesCuotas, cuotasMensuales, abonos, tarjeta.id, desde, hasta, periodo.anio, periodo.mes, tipoCambio])
 
-  const porcentaje = tarjeta.limite ? Math.min((total / tarjeta.limite) * 100, 100) : null
+  const porcentaje = tarjeta.limite ? Math.min((saldoPendiente / tarjeta.limite) * 100, 100) : null
+
+  const abonosPeriodo = abonos.filter(
+    (a) => a.tarjetaId === tarjeta.id && a.anio === periodo.anio && a.mes === periodo.mes
+  )
 
   return (
     <div className="mt-3 flex flex-col gap-2.5">
@@ -129,11 +248,11 @@ function ResumenCredito({
         )}
       </div>
 
-      {/* Total prominent */}
+      {/* Saldo pendiente prominent */}
       <div className="flex items-baseline justify-between">
-        <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total a pagar</span>
-        <span className="text-xl font-bold tabular-nums">
-          {simbolo}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+        <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Saldo pendiente</span>
+        <span className={cn('text-xl font-bold tabular-nums', saldoPendiente <= 0 && totalFacturado > 0 && 'text-green-500')}>
+          {simbolo}{saldoPendiente.toLocaleString(undefined, { maximumFractionDigits: 2 })}
         </span>
       </div>
 
@@ -167,7 +286,89 @@ function ResumenCredito({
           <span className="text-muted-foreground">Cuotas</span>
           <span className="tabular-nums">{simbolo}{subtotalCuotas.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
+        <div className="flex justify-between text-xs font-medium border-t border-border pt-1 mt-0.5">
+          <span className="text-muted-foreground">Total facturado</span>
+          <span className="tabular-nums">{simbolo}{totalFacturado.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+        </div>
       </div>
+
+      {/* Abonos section */}
+      {(abonosPeriodo.length > 0 || totalAbonos > 0) && (
+        <div className="flex flex-col gap-1 pt-1 border-t border-border">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Abonos registrados</p>
+          {abonosPeriodo.map((abono) => (
+            <div key={abono.id}>
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-green-600 dark:text-green-400 font-medium">
+                    -{simbolo}{conv(abono.monto, abono.moneda).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                  {abono.notas && <span className="text-muted-foreground truncate max-w-[120px]">{abono.notas}</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">{fmtFecha(abono.fecha)}</span>
+                  <button
+                    onClick={() => setEliminandoAbonoId(eliminandoAbonoId === abono.id ? null : abono.id)}
+                    className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors text-[10px]"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <AnimatePresence>
+                {eliminandoAbonoId === abono.id && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-destructive/10 mt-1">
+                      <p className="text-xs text-destructive">¿Eliminar abono?</p>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setEliminandoAbonoId(null)}
+                          className="h-6 px-2 rounded text-[10px] text-muted-foreground border border-border"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await abonosTarjetaRepository.eliminar(abono.id)
+                            setEliminandoAbonoId(null)
+                          }}
+                          className="h-6 px-2 rounded text-[10px] bg-destructive text-white font-semibold"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Register abono button / form */}
+      {!mostrarFormAbono ? (
+        <button
+          onClick={() => setMostrarFormAbono(true)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-0.5 self-start"
+        >
+          <CreditCard size={12} />
+          Registrar abono
+        </button>
+      ) : (
+        <FormAbono
+          tarjeta={tarjeta}
+          periodo={periodo}
+          onGuardado={() => setMostrarFormAbono(false)}
+          onCancelar={() => setMostrarFormAbono(false)}
+        />
+      )}
     </div>
   )
 }
@@ -195,6 +396,7 @@ export default function Tarjetas() {
   const gastosFijos      = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
   const planesCuotas     = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
   const cuotasMensuales  = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
+  const abonosTarjeta    = useCollection<AbonoTarjeta>(() => hCol('abonosTarjeta'), [])
 
   const [panel, setPanel] = useState<PanelActivo>({ tipo: 'ninguno' })
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
@@ -329,6 +531,7 @@ export default function Tarjetas() {
                     gastosFijos={gastosFijos ?? []}
                     planesCuotas={planesCuotas ?? []}
                     cuotasMensuales={cuotasMensuales ?? []}
+                    abonos={abonosTarjeta ?? []}
                     tipoCambio={tipoCambio}
                   />
                 )}

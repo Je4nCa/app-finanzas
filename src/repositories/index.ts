@@ -5,3 +5,4 @@ export { gastosFijosRepository }                                                
 export { planesCuotasRepository, cuotasMensualesRepository, crearPlanConCuotas } from './cuotas.repository'
 export { balancesRepository }                                                    from './balances.repository'
 export { tipoCambioRepository }                                                  from './tipo-cambio.repository'
+export { abonosTarjetaRepository }                                               from './abonos.repository'
