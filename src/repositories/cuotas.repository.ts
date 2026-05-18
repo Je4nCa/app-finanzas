@@ -47,9 +47,9 @@ class CuotasMensualesRepository extends BaseRepository<CuotaMensual> {
 
 export async function crearPlanConCuotas(plan: PlanCuotas, cuotas: CuotaMensual[]): Promise<void> {
   const batch = writeBatch(firestore)
-  batch.set(hDoc('planesCuotas', plan.id), plan as Record<string, unknown>)
+  batch.set(hDoc('planesCuotas', plan.id), plan as unknown as Record<string, unknown>)
   cuotas.forEach((c) =>
-    batch.set(hDoc('cuotasMensuales', c.id), c as Record<string, unknown>)
+    batch.set(hDoc('cuotasMensuales', c.id), c as unknown as Record<string, unknown>)
   )
   await batch.commit()
 }

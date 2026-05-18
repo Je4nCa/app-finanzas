@@ -16,13 +16,13 @@ export class BaseRepository<T extends { id: ID }> {
   }
 
   async crear(item: T): Promise<void> {
-    await setDoc(hDoc(this.colName, item.id), item as Record<string, unknown>)
+    await setDoc(hDoc(this.colName, item.id), item as unknown as Record<string, unknown>)
   }
 
   async crearBulk(items: T[]): Promise<void> {
     const batch = writeBatch(firestore)
     items.forEach((item) =>
-      batch.set(hDoc(this.colName, item.id), item as Record<string, unknown>)
+      batch.set(hDoc(this.colName, item.id), item as unknown as Record<string, unknown>)
     )
     await batch.commit()
   }
