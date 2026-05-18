@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0a0a0a"/>
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#7c3aed" stroke-width="20"/>
+  <!-- Inner circle fill -->
+  <circle cx="256" cy="256" r="120" fill="#7c3aed" opacity="0.15"/>
+  <!-- Colón symbol -->
+  <text
+    x="256" y="300"
+    text-anchor="middle"
+    font-family="Georgia, serif"
+    font-size="180"
+    font-weight="bold"
+    fill="#7c3aed"
+  >₡</text>
+</svg>

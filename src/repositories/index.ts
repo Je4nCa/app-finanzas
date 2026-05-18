@@ -1,0 +1,7 @@
+export { tarjetasRepository }                                                    from './tarjetas.repository'
+export { gastosRepository }                                                      from './gastos.repository'
+export { usuariosRepository }                                                    from './usuarios.repository'
+export { gastosFijosRepository }                                                 from './gastos-fijos.repository'
+export { planesCuotasRepository, cuotasMensualesRepository, crearPlanConCuotas } from './cuotas.repository'
+export { balancesRepository }                                                    from './balances.repository'
+export { tipoCambioRepository }                                                  from './tipo-cambio.repository'

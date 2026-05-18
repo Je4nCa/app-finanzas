@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark mode por defecto — soft blacks y muted grays (estilo Apple Wallet) */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 243 75% 68%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 80%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 95%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 14%;
+    --input: 0 0% 12%;
+    --ring: 243 75% 68%;
+
+    --radius: 0.75rem;
+
+    /* Colores financieros */
+    --income: 142 71% 45%;
+    --expense: 0 72% 51%;
+    --warning: 38 92% 50%;
+    --success: 142 71% 45%;
+    --usd: 142 71% 45%;
+    --crc: 199 89% 48%;
+  }
+
+  /* Light mode — disponible pero no es el default */
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 20%;
+
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 9%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 243 75% 59%;
+
+    --income: 142 76% 36%;
+    --expense: 0 84% 60%;
+    --warning: 38 92% 50%;
+    --success: 142 76% 36%;
+    --usd: 142 76% 36%;
+    --crc: 199 89% 38%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Prevenir overscroll bounce en iOS */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    /* Safe area para iPhone notch */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Scrollbar invisible en mobile */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Números tabulares para montos financieros */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Glassmorphism para cards premium */
+  .glass {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10;
+  }
+
+  .glass-strong {
+    @apply backdrop-blur-2xl bg-white/8 border border-white/15;
+  }
+
+  /* Gradientes financieros */
+  .gradient-income {
+    background: linear-gradient(135deg, hsl(142 71% 45% / 0.15), hsl(142 71% 45% / 0.05));
+  }
+
+  .gradient-expense {
+    background: linear-gradient(135deg, hsl(0 72% 51% / 0.15), hsl(0 72% 51% / 0.05));
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.05));
+  }
+
+  /* Truncate para montos largos */
+  .amount {
+    @apply tabular-nums font-semibold tracking-tight;
+  }
+
+  /* Safe area padding */
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}

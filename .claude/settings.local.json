@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(mkdir -p /Users/jeanvillamonte/Documents/app-finanzas/.claude)",
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:www.ariari.com)",
+      "WebFetch(domain:app.ariari.com)",
+      "WebFetch(domain:open.er-api.com)",
+      "Bash(node -e \"require\\('zlib'\\)\")"
+    ]
+  }
+}
