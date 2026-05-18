@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
+import { periodoFacturacion } from '@/lib/billingCycle'
 import { useMonedaStore, useUsuarioStore } from '@/store'
 import { calcularPartes } from '@/services/compartido.service'
 import { EstadoCuota } from '@/types'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
-import type { Gasto, GastoFijo, CuotaMensual, PlanCuotas, Usuario } from '@/types'
+import type { Gasto, GastoFijo, CuotaMensual, PlanCuotas, Usuario, TarjetaCredito } from '@/types'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -105,16 +106,33 @@ export default function Dashboard() {
 
   const prefijo = `${periodo.anio}-${String(periodo.mes).padStart(2, '0')}`
 
-  const todosGastos    = useCollection<Gasto>(() => hCol('gastos'), [])
+  const todosGastos      = useCollection<Gasto>(() => hCol('gastos'), [])
   const todosGastosFijos = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
-  const todasCuotas    = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
-  const planes         = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
-  const usuarios       = useCollection<Usuario>(() => hCol('usuarios'), [])
+  const todasCuotas      = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
+  const planes           = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
+  const usuarios         = useCollection<Usuario>(() => hCol('usuarios'), [])
+  const tarjetas         = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
 
-  const gastos = useMemo(
-    () => todosGastos?.filter((g) => g.fecha.startsWith(prefijo)),
-    [todosGastos, prefijo]
-  )
+  // Mapa de tarjeta.id → diaCierre para consulta O(1)
+  const diaCierrePorTarjeta = useMemo(() => {
+    const map: Record<string, number | undefined> = {}
+    tarjetas?.forEach((t) => { map[t.id] = t.tipo === 'credito' ? t.diaCierre : undefined })
+    return map
+  }, [tarjetas])
+
+  // Gastos filtrados por período de facturación de cada tarjeta de crédito,
+  // o por mes calendario para efectivo / débito
+  const gastos = useMemo(() => {
+    if (!todosGastos) return undefined
+    return todosGastos.filter((g) => {
+      const diaCierre = g.tarjetaId ? diaCierrePorTarjeta[g.tarjetaId] : undefined
+      if (diaCierre) {
+        const { desde, hasta } = periodoFacturacion(periodo.anio, periodo.mes, diaCierre)
+        return g.fecha >= desde && g.fecha <= hasta
+      }
+      return g.fecha.startsWith(prefijo)
+    })
+  }, [todosGastos, diaCierrePorTarjeta, periodo.anio, periodo.mes, prefijo])
   const gastosFijos = useMemo(
     () => todosGastosFijos?.filter((f) => f.activo),
     [todosGastosFijos]
@@ -131,7 +149,7 @@ export default function Dashboard() {
   }, [gastos, cuotas, planes, gastosFijos, usuarios, monedaBase, tipoCambio])
 
   const esMesActual = periodo.anio === now.getFullYear() && periodo.mes === now.getMonth() + 1
-  const loading     = !totales
+  const loading     = !totales || !tarjetas
 
   return (
     <PageWrapper className="px-4 py-6 flex flex-col gap-5">

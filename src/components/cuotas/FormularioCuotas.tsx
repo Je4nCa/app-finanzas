@@ -6,6 +6,7 @@ import { hCol } from '@/lib/firebase'
 import { crearPlanConCuotas } from '@/repositories'
 import { generarCuotas, labelMes } from '@/services/cuotas.service'
 import { calcularPartes } from '@/services/compartido.service'
+import { mesDePago } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
 import type { Moneda, TarjetaCredito, Usuario } from '@/types'
 import { TipoGastoCompartido } from '@/types'
@@ -76,6 +77,27 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
   const [anioInicio, mesInicio] = form.fechaInicio
     ? form.fechaInicio.split('-').map(Number)
     : [0, 0]
+
+  // Aviso de ciclo de facturación: si la compra es HOY, ¿en qué mes cae el primer cobro?
+  const avisoCorte = (() => {
+    const tarjeta = tarjetas?.find((t) => t.id === form.tarjetaId)
+    if (!tarjeta || tarjeta.tipo !== 'credito' || !tarjeta.diaCierre) return null
+    const hoy = new Date()
+    const diaHoy = hoy.getDate()
+    const mesHoy = hoy.getMonth() + 1
+    const anioHoy = hoy.getFullYear()
+    const { anio: anioSug, mes: mesSug } = mesDePago(
+      `${anioHoy}-${String(mesHoy).padStart(2, '0')}-${String(diaHoy).padStart(2, '0')}`,
+      tarjeta.diaCierre
+    )
+    const despuesDelCorte = diaHoy > tarjeta.diaCierre
+    return {
+      diaCierre: tarjeta.diaCierre,
+      despuesDelCorte,
+      primerMesSugerido: `${anioSug}-${String(mesSug).padStart(2, '0')}`,
+      labelSugerido: labelMes(mesSug, anioSug),
+    }
+  })()
 
   const fechaFin = (() => {
     if (!form.fechaInicio) return ''
@@ -205,6 +227,21 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
           ))}
         </div>
       </Campo>
+
+      {/* Aviso de corte */}
+      {avisoCorte && (
+        <div className={cn(
+          'rounded-xl px-3.5 py-2.5 text-xs leading-relaxed',
+          avisoCorte.despuesDelCorte
+            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+        )}>
+          {avisoCorte.despuesDelCorte
+            ? <>Hoy pasaste el corte del día {avisoCorte.diaCierre}. El primer cobro cae en <strong>{avisoCorte.labelSugerido}</strong>.</>
+            : <>Aún no llegaste al corte del día {avisoCorte.diaCierre}. El primer cobro puede ser <strong>{avisoCorte.labelSugerido}</strong>.</>
+          }
+        </div>
+      )}
 
       {/* Mes de inicio */}
       <Campo label="Primer mes de cobro" error={errores.fechaInicio}>

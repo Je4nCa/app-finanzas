@@ -5,6 +5,7 @@ import {
   planesCuotasRepository,
   cuotasMensualesRepository,
 } from '@/repositories'
+import { periodoFacturacion } from '@/lib/billingCycle'
 import type { ID, PeriodoMensual, Moneda } from '@/types'
 
 export interface TotalMensualTarjeta {
@@ -29,7 +30,15 @@ export async function calcularTotalMensual(
   if (!tarjeta) throw new Error(`Tarjeta no encontrada: ${tarjetaId}`)
 
   const monedaTarjeta = tarjeta.moneda
-  const prefijoFecha  = `${anio}-${String(mes).padStart(2, '0')}`
+
+  // Para tarjetas de crédito: filtrar gastos por período de facturación (cierre → siguiente cierre)
+  // Para tarjetas de débito: usar mes calendario
+  const filtrarGasto = tarjeta.tipo === 'credito' && tarjeta.diaCierre
+    ? (() => {
+        const { desde, hasta } = periodoFacturacion(anio, mes, tarjeta.diaCierre!)
+        return (fecha: string) => fecha >= desde && fecha <= hasta
+      })()
+    : (fecha: string) => fecha.startsWith(`${anio}-${String(mes).padStart(2, '0')}`)
 
   const [todosGastos, todosGastosFijos, planes, cuotasDelMes] = await Promise.all([
     gastosRepository.obtenerTodos(),
@@ -38,9 +47,9 @@ export async function calcularTotalMensual(
     cuotasMensualesRepository.obtenerPorPeriodo(anio, mes),
   ])
 
-  // 1. Gastos variables del mes para esta tarjeta
+  // 1. Gastos variables del período de facturación para esta tarjeta
   const gastos = todosGastos.filter(
-    (g) => g.tarjetaId === tarjetaId && g.fecha.startsWith(prefijoFecha)
+    (g) => g.tarjetaId === tarjetaId && filtrarGasto(g.fecha)
   )
   const subtotalGastos = gastos.reduce(
     (suma, g) =>
@@ -48,17 +57,17 @@ export async function calcularTotalMensual(
     0
   )
 
-  // 2. Gastos fijos activos de esta tarjeta
+  // 2. Gastos fijos activos de esta tarjeta (mensuales, sin fecha específica)
   const gastosFijos = todosGastosFijos.filter((g) => g.activo && g.tarjetaId === tarjetaId)
   const subtotalGastosFijos = gastosFijos.reduce(
     (suma, g) => suma + convertir(g.monto, g.moneda, monedaTarjeta, tipoCambio),
     0
   )
 
-  // 3. Cuotas del mes para los planes de esta tarjeta
-  const planIds       = new Set(planes.map((p) => p.id))
-  const monedaPorPlan = Object.fromEntries(planes.map((p) => [p.id, p.moneda]))
-  const cuotas        = cuotasDelMes.filter((c) => planIds.has(c.planCuotasId))
+  // 3. Cuotas del mes para los planes de esta tarjeta (ya están asignadas por mes de cobro)
+  const planIds        = new Set(planes.map((p) => p.id))
+  const monedaPorPlan  = Object.fromEntries(planes.map((p) => [p.id, p.moneda]))
+  const cuotas         = cuotasDelMes.filter((c) => planIds.has(c.planCuotasId))
   const subtotalCuotas = cuotas.reduce(
     (suma, c) =>
       suma +
