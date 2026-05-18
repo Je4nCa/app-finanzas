@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { TIPO_CAMBIO_COMPRA_DEFAULT, TIPO_CAMBIO_VENTA_DEFAULT } from '@/constants/moneda'
-import { obtenerTipoCambio } from '@/services/tipoCambio.service'
+import { obtenerTipoCambio, guardarTipoCambioManual } from '@/services/tipoCambio.service'
 import type { Moneda } from '@/types'
 
 interface MonedaStore {
@@ -15,6 +15,7 @@ interface MonedaStore {
   cargandoTipoCambio:  boolean
   setMonedaBase: (moneda: Moneda) => void
   fetchTipoCambio: () => Promise<void>
+  setTipoCambioManual: (compra: number, venta: number) => Promise<void>
   /** USD→CRC usa tasa venta; CRC→USD usa tasa compra */
   convertir: (monto: number, de: Moneda, a: Moneda) => number
 }
@@ -48,6 +49,21 @@ export const useMonedaStore = create<MonedaStore>()(
             },
             false,
             'fetchTipoCambio/fulfilled'
+          )
+        },
+
+        setTipoCambioManual: async (compra, venta) => {
+          await guardarTipoCambioManual(compra, venta)
+          set(
+            {
+              tipoCambioCompra:    compra,
+              tipoCambioVenta:     venta,
+              tipoCambio:          venta,
+              fuenteTipoCambio:    'Manual',
+              ultimaActualizacion: Date.now(),
+            },
+            false,
+            'setTipoCambioManual'
           )
         },
 

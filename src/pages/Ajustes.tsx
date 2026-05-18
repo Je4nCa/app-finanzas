@@ -1,4 +1,5 @@
-import { RefreshCw, LogOut } from 'lucide-react'
+import { RefreshCw, LogOut, Pencil, Check, X } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
@@ -22,8 +23,39 @@ export default function Ajustes() {
   const {
     tipoCambioCompra, tipoCambioVenta, fuenteTipoCambio,
     ultimaActualizacion, cargandoTipoCambio, fetchTipoCambio,
-    monedaBase, setMonedaBase,
+    setTipoCambioManual, monedaBase, setMonedaBase,
   } = useMonedaStore()
+
+  const [editandoTC, setEditandoTC] = useState(false)
+  const [inputCompra, setInputCompra] = useState('')
+  const [inputVenta, setInputVenta] = useState('')
+  const [guardandoTC, setGuardandoTC] = useState(false)
+  const [errorTC, setErrorTC] = useState<string | null>(null)
+
+  function abrirEdicion() {
+    setInputCompra(tipoCambioCompra.toString())
+    setInputVenta(tipoCambioVenta.toString())
+    setErrorTC(null)
+    setEditandoTC(true)
+  }
+
+  async function guardarTC() {
+    const compra = parseFloat(inputCompra)
+    const venta  = parseFloat(inputVenta)
+    if (!compra || compra <= 0) { setErrorTC('Compra inválida'); return }
+    if (!venta  || venta  <= 0) { setErrorTC('Venta inválida');  return }
+    if (compra > venta) { setErrorTC('Compra no puede ser mayor que venta'); return }
+    setGuardandoTC(true)
+    setErrorTC(null)
+    try {
+      await setTipoCambioManual(compra, venta)
+      setEditandoTC(false)
+    } catch {
+      setErrorTC('No se pudo guardar. Intentá de nuevo.')
+    } finally {
+      setGuardandoTC(false)
+    }
+  }
 
   const { usuarioActivo, limpiarUsuario } = useUsuarioStore()
 
@@ -112,51 +144,112 @@ export default function Ajustes() {
         </p>
 
         <div className="rounded-2xl bg-card border border-border p-4 flex flex-col gap-4">
-          {/* Compra / Venta */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex gap-6">
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Compra</p>
-                <p className="text-2xl font-bold tabular-nums">
-                  {cargandoTipoCambio
-                    ? <span className="text-muted-foreground text-xl">…</span>
-                    : <>₡{tipoCambioCompra.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
-                  }
-                </p>
+          {editandoTC ? (
+            /* ── Modo edición ── */
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-muted-foreground">Ingresá los valores actuales del BCCR (₡ por $1)</p>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground">Compra</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={inputCompra}
+                    onChange={(e) => setInputCompra(e.target.value)}
+                    placeholder="515.00"
+                    autoFocus
+                    className="w-full mt-1 h-11 px-3 rounded-xl bg-secondary border border-border text-lg font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground">Venta</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={inputVenta}
+                    onChange={(e) => setInputVenta(e.target.value)}
+                    placeholder="520.00"
+                    className="w-full mt-1 h-11 px-3 rounded-xl bg-secondary border border-border text-lg font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Venta</p>
-                <p className="text-2xl font-bold tabular-nums">
-                  {cargandoTipoCambio
-                    ? <span className="text-muted-foreground text-xl">…</span>
-                    : <>₡{tipoCambioVenta.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
-                  }
-                </p>
+              {errorTC && <p className="text-xs text-destructive">{errorTC}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditandoTC(false)}
+                  className="flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-secondary transition-colors"
+                >
+                  <X size={14} /> Cancelar
+                </button>
+                <button
+                  onClick={guardarTC}
+                  disabled={guardandoTC}
+                  className="flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+                >
+                  <Check size={14} /> {guardandoTC ? 'Guardando…' : 'Guardar'}
+                </button>
               </div>
             </div>
+          ) : (
+            /* ── Modo lectura ── */
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex gap-6">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Compra</p>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {cargandoTipoCambio
+                        ? <span className="text-muted-foreground text-xl">…</span>
+                        : <>₡{tipoCambioCompra.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Venta</p>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {cargandoTipoCambio
+                        ? <span className="text-muted-foreground text-xl">…</span>
+                        : <>₡{tipoCambioVenta.toLocaleString(undefined, { maximumFractionDigits: 2 })}</>
+                      }
+                    </p>
+                  </div>
+                </div>
 
-            <button
-              onClick={() => fetchTipoCambio()}
-              disabled={cargandoTipoCambio}
-              className={cn(
-                'w-11 h-11 flex items-center justify-center rounded-xl border border-border shrink-0',
-                'text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors',
-                'disabled:opacity-40 disabled:cursor-not-allowed'
-              )}
-              title="Actualizar tipo de cambio"
-            >
-              <RefreshCw size={18} className={cn(cargandoTipoCambio && 'animate-spin')} />
-            </button>
-          </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    onClick={abrirEdicion}
+                    className="w-11 h-11 flex items-center justify-center rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Editar manualmente"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => fetchTipoCambio()}
+                    disabled={cargandoTipoCambio}
+                    className={cn(
+                      'w-11 h-11 flex items-center justify-center rounded-xl border border-border shrink-0',
+                      'text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors',
+                      'disabled:opacity-40 disabled:cursor-not-allowed'
+                    )}
+                    title="Recargar desde Firestore"
+                  >
+                    <RefreshCw size={16} className={cn(cargandoTipoCambio && 'animate-spin')} />
+                  </button>
+                </div>
+              </div>
 
-          <div className="flex flex-col gap-1.5 pt-3 border-t border-border">
-            <Row label="Fuente"               valor="ARI Casa de Cambio — BCCR Ventanilla" />
-            <Row label="Última actualización" valor={tiempoRelativo(ultimaActualizacion)} />
-            <Row label="Actualización auto."  valor="1 vez al día (9 AM)" />
-            {fuenteTipoCambio && fuenteTipoCambio.includes('estimado') && (
-              <p className="text-[11px] text-amber-500 mt-1">Sin conexión — usando valores estimados</p>
-            )}
-          </div>
+              <div className="flex flex-col gap-1.5 pt-3 border-t border-border">
+                <Row label="Fuente"               valor={fuenteTipoCambio || 'ARI Casa de Cambio — BCCR'} />
+                <Row label="Última actualización" valor={tiempoRelativo(ultimaActualizacion)} />
+                <Row label="Actualización auto."  valor="1 vez al día (9 AM)" />
+                {fuenteTipoCambio && fuenteTipoCambio.includes('estimado') && (
+                  <p className="text-[11px] text-amber-500 mt-1">Sin conexión — usando valores estimados</p>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <p className="text-[11px] text-muted-foreground px-1 leading-relaxed">

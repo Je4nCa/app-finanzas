@@ -14,7 +14,7 @@ const USUARIOS_INICIALES: Usuario[] = [
   {
     id: 'user-pareja',
     nombre: 'Mamocita',
-    monedaPreferida: 'USD',
+    monedaPreferida: 'CRC',
     color: '#ec4899',
     creadoEn: new Date().toISOString(),
     actualizadoEn: new Date().toISOString(),
@@ -23,12 +23,21 @@ const USUARIOS_INICIALES: Usuario[] = [
 
 export async function seedFirestoreIfEmpty(): Promise<void> {
   const snap = await getDocs(hCol('usuarios'))
-  if (!snap.empty) return
 
-  const { setDoc } = await import('firebase/firestore')
-  await Promise.all(
-    USUARIOS_INICIALES.map((u) =>
-      setDoc(hDoc('usuarios', u.id), u as unknown as Record<string, unknown>)
+  const { setDoc, updateDoc } = await import('firebase/firestore')
+
+  if (snap.empty) {
+    await Promise.all(
+      USUARIOS_INICIALES.map((u) =>
+        setDoc(hDoc('usuarios', u.id), u as unknown as Record<string, unknown>)
+      )
     )
-  )
+    return
+  }
+
+  // Migración: corregir monedaPreferida de user-pareja si quedó en USD
+  const pareja = snap.docs.find((d) => d.id === 'user-pareja')
+  if (pareja && (pareja.data() as Usuario).monedaPreferida === 'USD') {
+    await updateDoc(hDoc('usuarios', 'user-pareja'), { monedaPreferida: 'CRC' })
+  }
 }

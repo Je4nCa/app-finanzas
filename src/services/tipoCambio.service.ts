@@ -39,6 +39,17 @@ export interface ResultadoTipoCambio {
   esNuevo:      boolean
 }
 
+export async function guardarTipoCambioManual(compra: number, venta: number): Promise<void> {
+  const { setDoc } = await import('firebase/firestore')
+  await setDoc(hDoc('config', 'tipoCambio'), {
+    compra,
+    venta,
+    fuente: 'Manual',
+    fechaActualizacion: new Date().toISOString(),
+  })
+  escribirCache(compra, venta, 'Manual')
+}
+
 /**
  * Lee el tipo de cambio ARI desde Firestore (actualizado por GitHub Actions diariamente).
  * Prioridad: caché del día → Firestore → caché vencida → constante default.
