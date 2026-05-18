@@ -1,4 +1,4 @@
-import type { ID, FechaHoraISO } from './comunes'
+import type { ID, FechaISO, FechaHoraISO } from './comunes'
 import type { Moneda } from './moneda'
 
 // ─── Tipo de tarjeta ──────────────────────────────────────────────────────────
@@ -25,6 +25,22 @@ export interface TarjetaCredito {
   diaPago?: number
   /** Solo débito: saldo inicial (base para calcular el disponible) */
   saldoInicial?: number
+}
+
+// ─── Abono a tarjeta de crédito ───────────────────────────────────────────────
+
+export interface AbonoTarjeta {
+  id: ID
+  tarjetaId: ID
+  /** Período de facturación al que se aplica el abono */
+  anio: number
+  mes: number
+  monto: number
+  moneda: Moneda
+  /** Fecha en que se realizó el pago (YYYY-MM-DD) */
+  fecha: FechaISO
+  notas?: string
+  creadoEn: FechaHoraISO
 }
 
 // ─── Resumen de estado de una tarjeta en un mes ───────────────────────────────

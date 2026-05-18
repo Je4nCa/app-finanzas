@@ -6,3 +6,4 @@ export { planesCuotasRepository, cuotasMensualesRepository, crearPlanConCuotas }
 export { balancesRepository }                                                    from './balances.repository'
 export { tipoCambioRepository }                                                  from './tipo-cambio.repository'
 export { abonosTarjetaRepository }                                               from './abonos.repository'
+export { salariosRepository }                                                    from './salarios.repository'

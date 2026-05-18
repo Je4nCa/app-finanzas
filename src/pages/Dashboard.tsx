@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CreditCard, Repeat2, ReceiptText, Wallet, ChevronRight as Arrow, Plus, TrendingDown } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { periodoFacturacion } from '@/lib/billingCycle'
 import { useMonedaStore, useUsuarioStore } from '@/store'
+import { salariosRepository } from '@/repositories'
 import { calcularPartes } from '@/services/compartido.service'
 import { EstadoCuota } from '@/types'
 import { cn } from '@/lib/utils'
+import { nanoid } from 'nanoid'
 import PageWrapper from '@components/ui/PageWrapper'
-import type { Gasto, GastoFijo, CuotaMensual, PlanCuotas, Usuario, TarjetaCredito } from '@/types'
+import type { Gasto, GastoFijo, CuotaMensual, PlanCuotas, Usuario, TarjetaCredito, Salario } from '@/types'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -25,6 +27,12 @@ function toBase(monto: number, origen: 'USD'|'CRC', base: 'USD'|'CRC', tc: numbe
   if (origen === base) return monto
   const t = tcMomento ?? tc
   return origen === 'USD' ? monto * t : monto / t
+}
+
+function conv(monto: number, origen: string, destino: string, tc: number): number {
+  if (origen === destino) return monto
+  if (origen === 'USD') return monto * tc
+  return monto / tc
 }
 
 interface Totales {
@@ -95,6 +103,237 @@ function fmt(n: number, moneda: 'USD'|'CRC') {
   return `${s}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 }
 
+function fmtMoneda(n: number, moneda: string) {
+  const s = moneda === 'USD' ? '$' : '₡'
+  return `${s}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+}
+
+// ─── Mini-form para registrar quincena ───────────────────────────────────────
+
+interface FormQuincenaProps {
+  usuario: Usuario
+  quincena: 1 | 2
+  periodo: { anio: number; mes: number }
+  monedaDefault: 'USD' | 'CRC'
+  onGuardado: () => void
+  onCancelar: () => void
+}
+
+function FormQuincena({ usuario, quincena, periodo, monedaDefault, onGuardado, onCancelar }: FormQuincenaProps) {
+  const [monto, setMonto] = useState('')
+  const [moneda, setMoneda] = useState<'USD'|'CRC'>(monedaDefault)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const montoNum = parseFloat(monto.replace(/,/g, ''))
+    if (!montoNum || montoNum <= 0) { setError('Ingresa un monto válido'); return }
+
+    setGuardando(true)
+    setError(null)
+    try {
+      const salario: Salario = {
+        id: nanoid(),
+        usuarioId: usuario.id,
+        monto: montoNum,
+        moneda,
+        anio: periodo.anio,
+        mes: periodo.mes,
+        quincena,
+        creadoEn: new Date().toISOString(),
+      }
+      await salariosRepository.crear(salario)
+      onGuardado()
+    } catch {
+      setError('No se pudo guardar. Intentá de nuevo.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 mt-1.5 p-2.5 rounded-xl bg-secondary/60 border border-border">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+        {usuario.nombre} · Quincena {quincena}
+      </p>
+      <div className="flex gap-2">
+        <select
+          value={moneda}
+          onChange={(e) => setMoneda(e.target.value as 'USD'|'CRC')}
+          className="h-8 px-2 rounded-lg bg-card border border-border text-xs focus:outline-none"
+        >
+          <option value="USD">USD ($)</option>
+          <option value="CRC">CRC (₡)</option>
+        </select>
+        <input
+          type="number"
+          step="any"
+          min="0"
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          placeholder="0"
+          autoFocus
+          className="flex-1 h-8 px-3 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="h-7 px-2.5 rounded-lg text-[11px] text-muted-foreground border border-border"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={guardando}
+          className="h-7 px-3 rounded-lg text-[11px] bg-primary text-primary-foreground font-semibold disabled:opacity-50"
+        >
+          {guardando ? 'Guardando…' : 'Guardar'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Tarjeta de salario por usuario ──────────────────────────────────────────
+
+interface TarjetaSalarioProps {
+  usuario: Usuario
+  salarios: Salario[]
+  gastosEnMoneda: number   // gastos del mes del usuario, en su moneda de salario
+  periodo: { anio: number; mes: number }
+  tipoCambio: number
+  monedaDefault: 'USD' | 'CRC'
+}
+
+function TarjetaSalario({ usuario, salarios, gastosEnMoneda, periodo, tipoCambio, monedaDefault }: TarjetaSalarioProps) {
+  type FormAbierto = null | { quincena: 1 | 2 }
+  const [formAbierto, setFormAbierto] = useState<FormAbierto>(null)
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+
+  const q1 = salarios.filter((s) => s.usuarioId === usuario.id && s.quincena === 1)
+  const q2 = salarios.filter((s) => s.usuarioId === usuario.id && s.quincena === 2)
+
+  const totalQ1 = q1.reduce((sum, s) => sum + conv(s.monto, s.moneda, monedaDefault, tipoCambio), 0)
+  const totalQ2 = q2.reduce((sum, s) => sum + conv(s.monto, s.moneda, monedaDefault, tipoCambio), 0)
+  const totalSalario = totalQ1 + totalQ2
+  const saldo = totalSalario - gastosEnMoneda
+  const pctGastado = totalSalario > 0 ? Math.min((gastosEnMoneda / totalSalario) * 100, 100) : 0
+
+  function QuincenaRow({ q, num }: { q: Salario[]; num: 1 | 2 }) {
+    const total = num === 1 ? totalQ1 : totalQ2
+    const yaRegistrado = q.length > 0
+
+    if (formAbierto?.quincena === num) {
+      return (
+        <FormQuincena
+          usuario={usuario}
+          quincena={num}
+          periodo={periodo}
+          monedaDefault={monedaDefault}
+          onGuardado={() => setFormAbierto(null)}
+          onCancelar={() => setFormAbierto(null)}
+        />
+      )
+    }
+
+    return (
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Quincena {num}</span>
+        <div className="flex items-center gap-1.5">
+          {yaRegistrado ? (
+            <>
+              <span className="text-xs font-medium tabular-nums">{fmtMoneda(total, monedaDefault)}</span>
+              {q.map((s) => (
+                <div key={s.id} className="relative">
+                  {eliminandoId === s.id ? (
+                    <div className="flex items-center gap-1 bg-destructive/10 rounded px-1.5 py-0.5">
+                      <span className="text-[10px] text-destructive">¿Eliminar?</span>
+                      <button
+                        onClick={() => setEliminandoId(null)}
+                        className="text-[10px] text-muted-foreground hover:text-foreground"
+                      >No</button>
+                      <button
+                        onClick={async () => {
+                          await salariosRepository.eliminar(s.id)
+                          setEliminandoId(null)
+                        }}
+                        className="text-[10px] text-destructive font-semibold"
+                      >Sí</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEliminandoId(s.id)}
+                      className="w-4 h-4 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors text-xs leading-none"
+                    >×</button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setFormAbierto({ quincena: num })}
+                className="w-5 h-5 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground transition-colors"
+                title="Agregar otro ingreso"
+              >
+                <Plus size={10} />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setFormAbierto({ quincena: num })}
+              className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
+            >
+              <Plus size={11} />
+              Registrar
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {/* Header usuario */}
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: usuario.color }} />
+        <span className="text-sm font-semibold">{usuario.nombre}</span>
+        <span className="text-xs text-muted-foreground ml-auto">{monedaDefault}</span>
+      </div>
+
+      {/* Quincenas */}
+      <QuincenaRow q={q1} num={1} />
+      <QuincenaRow q={q2} num={2} />
+
+      {/* Totales */}
+      {totalSalario > 0 && (
+        <div className="pt-2 border-t border-border flex flex-col gap-1.5">
+          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all', pctGastado > 90 ? 'bg-destructive' : pctGastado > 70 ? 'bg-amber-500' : 'bg-green-500')}
+              style={{ width: `${pctGastado}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              Gastos: {fmtMoneda(gastosEnMoneda, monedaDefault)} ({pctGastado.toFixed(0)}%)
+            </span>
+            <span className={cn('font-semibold tabular-nums', saldo < 0 ? 'text-destructive' : 'text-green-500')}>
+              {saldo >= 0 ? '+' : ''}{fmtMoneda(saldo, monedaDefault)}
+            </span>
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Salario total</span>
+            <span className="font-medium tabular-nums">{fmtMoneda(totalSalario, monedaDefault)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -112,16 +351,14 @@ export default function Dashboard() {
   const planes           = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
   const usuarios         = useCollection<Usuario>(() => hCol('usuarios'), [])
   const tarjetas         = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const todosSalarios    = useCollection<Salario>(() => hCol('salarios'), [])
 
-  // Mapa de tarjeta.id → diaCierre para consulta O(1)
   const diaCierrePorTarjeta = useMemo(() => {
     const map: Record<string, number | undefined> = {}
     tarjetas?.forEach((t) => { map[t.id] = t.tipo === 'credito' ? t.diaCierre : undefined })
     return map
   }, [tarjetas])
 
-  // Gastos filtrados por período de facturación de cada tarjeta de crédito,
-  // o por mes calendario para efectivo / débito
   const gastos = useMemo(() => {
     if (!todosGastos) return undefined
     return todosGastos.filter((g) => {
@@ -133,6 +370,7 @@ export default function Dashboard() {
       return g.fecha.startsWith(prefijo)
     })
   }, [todosGastos, diaCierrePorTarjeta, periodo.anio, periodo.mes, prefijo])
+
   const gastosFijos = useMemo(
     () => todosGastosFijos?.filter((f) => f.activo),
     [todosGastosFijos]
@@ -142,11 +380,27 @@ export default function Dashboard() {
     [todasCuotas, periodo.anio, periodo.mes]
   )
 
+  const salarios = useMemo(
+    () => todosSalarios?.filter((s) => s.anio === periodo.anio && s.mes === periodo.mes) ?? [],
+    [todosSalarios, periodo.anio, periodo.mes]
+  )
+
   const totales = useMemo(() => {
     if (!gastos || !cuotas || !planes || !gastosFijos || !usuarios) return null
     const cuotasPendientes = cuotas.filter((c) => c.estado !== EstadoCuota.Pagada)
     return calcularTotales(gastos, cuotasPendientes, planes, gastosFijos, usuarios, monedaBase, tipoCambio)
   }, [gastos, cuotas, planes, gastosFijos, usuarios, monedaBase, tipoCambio])
+
+  // Per-user expenses in their salary currency (determined by their monedaPreferida)
+  const gastosPorUsuarioEnSuMoneda = useMemo(() => {
+    if (!totales || !usuarios) return {}
+    const result: Record<string, number> = {}
+    for (const u of usuarios) {
+      const gastoEnBase = totales.porUsuario[u.id] ?? 0
+      result[u.id] = conv(gastoEnBase, monedaBase, u.monedaPreferida, tipoCambio)
+    }
+    return result
+  }, [totales, usuarios, monedaBase, tipoCambio])
 
   const esMesActual = periodo.anio === now.getFullYear() && periodo.mes === now.getMonth() + 1
   const loading     = !totales || !tarjetas
@@ -154,7 +408,7 @@ export default function Dashboard() {
   return (
     <PageWrapper className="px-4 py-6 flex flex-col gap-5">
 
-      {/* Header: usuario activo + navegación mes */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{MESES[periodo.mes - 1]}</h1>
@@ -162,7 +416,6 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Badge usuario activo */}
           {usuarioActivo && (
             <button
               onClick={() => navigate('/ajustes')}
@@ -177,7 +430,6 @@ export default function Dashboard() {
             </button>
           )}
 
-          {/* Navegación mes */}
           <div className="flex items-center">
             <button
               onClick={() => setPeriodo((p) => mesAnterior(p.anio, p.mes))}
@@ -222,7 +474,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Breakdown por usuario */}
             {usuarios && usuarios.length > 0 && totales.total > 0 && (
               <div className="flex flex-col gap-3 pt-3 border-t border-border">
                 {usuarios.map((u) => {
@@ -263,6 +514,37 @@ export default function Dashboard() {
               </p>
             )}
           </div>
+
+          {/* ── Salario del mes ─── */}
+          {usuarios && usuarios.length > 0 && (
+            <div className="rounded-2xl bg-card border border-border p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0">
+                  <TrendingDown size={18} className="text-green-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Salario del mes</p>
+                  <p className="text-sm text-muted-foreground font-medium">Quincena 1 + Quincena 2</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-5">
+                {usuarios.map((u, idx) => (
+                  <div key={u.id}>
+                    {idx > 0 && <div className="border-t border-border -mt-2.5 mb-2.5" />}
+                    <TarjetaSalario
+                      usuario={u}
+                      salarios={salarios}
+                      gastosEnMoneda={gastosPorUsuarioEnSuMoneda[u.id] ?? 0}
+                      periodo={periodo}
+                      tipoCambio={tipoCambio}
+                      monedaDefault={u.monedaPreferida as 'USD'|'CRC'}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── 3 stat cards ─── */}
           <div className="flex flex-col gap-3">
