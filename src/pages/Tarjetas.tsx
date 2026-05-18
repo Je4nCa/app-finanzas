@@ -1,16 +1,16 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CreditCard, Check, X } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
-import { tarjetasRepository, abonosTarjetaRepository } from '@/repositories'
+import { tarjetasRepository, abonosTarjetaRepository, montosManualesRepository } from '@/repositories'
 import { useMonedaStore } from '@/store'
 import { periodoFacturacion } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
 import { nanoid } from 'nanoid'
 import PageWrapper from '@components/ui/PageWrapper'
 import FormularioTarjeta from '@components/tarjetas/FormularioTarjeta'
-import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas, AbonoTarjeta, Moneda } from '@/types'
+import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas, AbonoTarjeta, MontoManualTarjeta, Moneda } from '@/types'
 
 const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -171,6 +171,7 @@ interface ResumenCreditoProps {
   planesCuotas: PlanCuotas[]
   cuotasMensuales: CuotaMensual[]
   abonos: AbonoTarjeta[]
+  montoManual?: MontoManualTarjeta
   tipoCambio: number
 }
 
@@ -182,10 +183,14 @@ function ResumenCredito({
   planesCuotas,
   cuotasMensuales,
   abonos,
+  montoManual,
   tipoCambio,
 }: ResumenCreditoProps) {
   const [mostrarFormAbono, setMostrarFormAbono] = useState(false)
   const [eliminandoAbonoId, setEliminandoAbonoId] = useState<string | null>(null)
+  const [editandoManual, setEditandoManual] = useState(false)
+  const [inputManual, setInputManual] = useState('')
+  const [guardandoManual, setGuardandoManual] = useState(false)
 
   const { desde, hasta } = periodoFacturacion(periodo.anio, periodo.mes, tarjeta.diaCierre ?? 1)
   const simbolo = tarjeta.moneda === 'USD' ? '$' : '₡'
@@ -196,7 +201,7 @@ function ResumenCredito({
     return monto / tipoCambio
   }
 
-  const { subtotalVar, subtotalFijos, subtotalCuotas, totalFacturado, totalAbonos, saldoPendiente } = useMemo(() => {
+  const { subtotalVar, subtotalFijos, subtotalCuotas, totalFacturado, totalAbonos, totalBase, saldoPendiente } = useMemo(() => {
     const subtotalVar = gastos
       .filter((g) => g.tarjetaId === tarjeta.id && g.fecha >= desde && g.fecha <= hasta)
       .reduce((sum, g) => sum + conv(g.monto, g.moneda), 0)
@@ -221,22 +226,50 @@ function ResumenCredito({
       .filter((a) => a.tarjetaId === tarjeta.id && a.anio === periodo.anio && a.mes === periodo.mes)
       .reduce((sum, a) => sum + conv(a.monto, a.moneda), 0)
 
+    const totalBase = montoManual ? montoManual.monto : totalFacturado
+
     return {
       subtotalVar,
       subtotalFijos,
       subtotalCuotas,
       totalFacturado,
       totalAbonos,
-      saldoPendiente: totalFacturado - totalAbonos,
+      totalBase,
+      saldoPendiente: totalBase - totalAbonos,
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gastos, gastosFijos, planesCuotas, cuotasMensuales, abonos, tarjeta.id, desde, hasta, periodo.anio, periodo.mes, tipoCambio])
+  }, [gastos, gastosFijos, planesCuotas, cuotasMensuales, abonos, montoManual, tarjeta.id, desde, hasta, periodo.anio, periodo.mes, tipoCambio])
 
   const porcentaje = tarjeta.limite ? Math.min((saldoPendiente / tarjeta.limite) * 100, 100) : null
 
   const abonosPeriodo = abonos.filter(
     (a) => a.tarjetaId === tarjeta.id && a.anio === periodo.anio && a.mes === periodo.mes
   )
+
+  async function guardarManual() {
+    const monto = parseFloat(inputManual.replace(/,/g, ''))
+    if (!monto || monto <= 0) return
+    setGuardandoManual(true)
+    try {
+      const id = montosManualesRepository.idPara(tarjeta.id, periodo.anio, periodo.mes)
+      await montosManualesRepository.crear({
+        id,
+        tarjetaId: tarjeta.id,
+        anio: periodo.anio,
+        mes: periodo.mes,
+        monto,
+        creadoEn: new Date().toISOString(),
+      })
+      setEditandoManual(false)
+    } finally {
+      setGuardandoManual(false)
+    }
+  }
+
+  async function limpiarManual() {
+    if (!montoManual) return
+    await montosManualesRepository.eliminar(montoManual.id)
+  }
 
   return (
     <div className="mt-3 flex flex-col gap-2.5">
@@ -251,7 +284,7 @@ function ResumenCredito({
       {/* Saldo pendiente prominent */}
       <div className="flex items-baseline justify-between">
         <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Saldo pendiente</span>
-        <span className={cn('text-xl font-bold tabular-nums', saldoPendiente <= 0 && totalFacturado > 0 && 'text-green-500')}>
+        <span className={cn('text-xl font-bold tabular-nums', saldoPendiente <= 0 && totalBase > 0 && 'text-green-500')}>
           {simbolo}{saldoPendiente.toLocaleString(undefined, { maximumFractionDigits: 2 })}
         </span>
       </div>
@@ -272,8 +305,9 @@ function ResumenCredito({
         </div>
       )}
 
-      {/* Subtotal rows */}
+      {/* Total a pagar (manual override o calculado) */}
       <div className="flex flex-col gap-1 pt-0.5">
+        {/* Subtotales calculados — siempre visibles como referencia */}
         <div className="flex justify-between text-xs">
           <span className="text-muted-foreground">Variables</span>
           <span className="tabular-nums">{simbolo}{subtotalVar.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
@@ -286,9 +320,63 @@ function ResumenCredito({
           <span className="text-muted-foreground">Cuotas</span>
           <span className="tabular-nums">{simbolo}{subtotalCuotas.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
-        <div className="flex justify-between text-xs font-medium border-t border-border pt-1 mt-0.5">
-          <span className="text-muted-foreground">Total facturado</span>
-          <span className="tabular-nums">{simbolo}{totalFacturado.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+
+        {/* Total a pagar: manual (editable) o calculado */}
+        <div className="flex items-center justify-between border-t border-border pt-1 mt-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Total a pagar</span>
+            {montoManual && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500">manual</span>
+            )}
+          </div>
+          {editandoManual ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={inputManual}
+                onChange={(e) => setInputManual(e.target.value)}
+                placeholder={totalFacturado.toFixed(0)}
+                autoFocus
+                className="w-28 h-7 px-2 rounded-lg bg-secondary border border-border text-sm tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                onClick={guardarManual}
+                disabled={guardandoManual}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
+              >
+                <Check size={13} />
+              </button>
+              <button
+                onClick={() => setEditandoManual(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium tabular-nums">
+                {simbolo}{(montoManual ? montoManual.monto : totalFacturado).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
+              {montoManual ? (
+                <button
+                  onClick={limpiarManual}
+                  className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors text-xs"
+                  title="Volver al calculado"
+                >×</button>
+              ) : (
+                <button
+                  onClick={() => { setInputManual(totalFacturado.toFixed(0)); setEditandoManual(true) }}
+                  className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+                  title="Ingresar monto manual"
+                >
+                  <Pencil size={11} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -396,7 +484,8 @@ export default function Tarjetas() {
   const gastosFijos      = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
   const planesCuotas     = useCollection<PlanCuotas>(() => hCol('planesCuotas'), [])
   const cuotasMensuales  = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
-  const abonosTarjeta    = useCollection<AbonoTarjeta>(() => hCol('abonosTarjeta'), [])
+  const abonosTarjeta      = useCollection<AbonoTarjeta>(() => hCol('abonosTarjeta'), [])
+  const montosManuales     = useCollection<MontoManualTarjeta>(() => hCol('montosManualesTarjeta'), [])
 
   const [panel, setPanel] = useState<PanelActivo>({ tipo: 'ninguno' })
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
@@ -532,6 +621,9 @@ export default function Tarjetas() {
                     planesCuotas={planesCuotas ?? []}
                     cuotasMensuales={cuotasMensuales ?? []}
                     abonos={abonosTarjeta ?? []}
+                    montoManual={montosManuales?.find(
+                      (m) => m.tarjetaId === tarjeta.id && m.anio === periodo.anio && m.mes === periodo.mes
+                    )}
                     tipoCambio={tipoCambio}
                   />
                 )}

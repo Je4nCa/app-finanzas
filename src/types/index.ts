@@ -12,7 +12,7 @@ export type { CategoriaId, Categoria } from './categoria'
 export type { Usuario, PerfilPareja } from './usuario'
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
-export type { TipoTarjeta, TarjetaCredito, AbonoTarjeta, EstadoTarjetaMes } from './tarjeta'
+export type { TipoTarjeta, TarjetaCredito, AbonoTarjeta, MontoManualTarjeta, EstadoTarjetaMes } from './tarjeta'
 
 // ─── Salario ──────────────────────────────────────────────────────────────────
 export type { Salario } from './salario'

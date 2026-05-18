@@ -43,6 +43,17 @@ export interface AbonoTarjeta {
   creadoEn: FechaHoraISO
 }
 
+// ─── Monto manual a pagar (override del calculado) ───────────────────────────
+
+export interface MontoManualTarjeta {
+  id: ID         // `${tarjetaId}-${anio}-${mes}`
+  tarjetaId: ID
+  anio: number
+  mes: number
+  monto: number
+  creadoEn: FechaHoraISO
+}
+
 // ─── Resumen de estado de una tarjeta en un mes ───────────────────────────────
 
 export interface EstadoTarjetaMes {

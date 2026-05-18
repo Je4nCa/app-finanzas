@@ -7,3 +7,4 @@ export { balancesRepository }                                                   
 export { tipoCambioRepository }                                                  from './tipo-cambio.repository'
 export { abonosTarjetaRepository }                                               from './abonos.repository'
 export { salariosRepository }                                                    from './salarios.repository'
+export { montosManualesRepository }                                              from './montos-manuales.repository'
