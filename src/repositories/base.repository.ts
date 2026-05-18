@@ -2,6 +2,12 @@ import { getDocs, getDoc, setDoc, updateDoc, deleteDoc, writeBatch } from 'fireb
 import { firestore, hCol, hDoc } from '@/lib/firebase'
 import type { ID } from '@/types'
 
+function sinUndefined<T extends object>(obj: T): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  )
+}
+
 export class BaseRepository<T extends { id: ID }> {
   constructor(protected readonly colName: string) {}
 
@@ -16,19 +22,19 @@ export class BaseRepository<T extends { id: ID }> {
   }
 
   async crear(item: T): Promise<void> {
-    await setDoc(hDoc(this.colName, item.id), item as unknown as Record<string, unknown>)
+    await setDoc(hDoc(this.colName, item.id), sinUndefined(item))
   }
 
   async crearBulk(items: T[]): Promise<void> {
     const batch = writeBatch(firestore)
     items.forEach((item) =>
-      batch.set(hDoc(this.colName, item.id), item as unknown as Record<string, unknown>)
+      batch.set(hDoc(this.colName, item.id), sinUndefined(item))
     )
     await batch.commit()
   }
 
   async actualizar(id: ID, cambios: Partial<T>): Promise<void> {
-    await updateDoc(hDoc(this.colName, id), cambios as Record<string, unknown>)
+    await updateDoc(hDoc(this.colName, id), sinUndefined(cambios))
   }
 
   async eliminar(id: ID): Promise<void> {

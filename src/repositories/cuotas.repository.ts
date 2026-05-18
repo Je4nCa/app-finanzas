@@ -45,11 +45,15 @@ class CuotasMensualesRepository extends BaseRepository<CuotaMensual> {
   }
 }
 
+function sinUndefined<T extends object>(obj: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
+}
+
 export async function crearPlanConCuotas(plan: PlanCuotas, cuotas: CuotaMensual[]): Promise<void> {
   const batch = writeBatch(firestore)
-  batch.set(hDoc('planesCuotas', plan.id), plan as unknown as Record<string, unknown>)
+  batch.set(hDoc('planesCuotas', plan.id), sinUndefined(plan))
   cuotas.forEach((c) =>
-    batch.set(hDoc('cuotasMensuales', c.id), c as unknown as Record<string, unknown>)
+    batch.set(hDoc('cuotasMensuales', c.id), sinUndefined(c))
   )
   await batch.commit()
 }
