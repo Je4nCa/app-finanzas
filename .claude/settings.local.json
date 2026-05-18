@@ -9,7 +9,8 @@
       "WebFetch(domain:www.ariari.com)",
       "WebFetch(domain:app.ariari.com)",
       "WebFetch(domain:open.er-api.com)",
-      "Bash(node -e \"require\\('zlib'\\)\")"
+      "Bash(node -e \"require\\('zlib'\\)\")",
+      "Bash(npx tsc *)"
     ]
   }
 }

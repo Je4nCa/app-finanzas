@@ -25,7 +25,10 @@ interface Campos {
   porcentajeMio: number
 }
 
-const hoy = new Date().toISOString().slice(0, 10)
+function fechaHoyLocal(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const INICIAL: Campos = {
   titulo: '',
@@ -34,7 +37,7 @@ const INICIAL: Campos = {
   categoriaId: 'comida',
   tarjetaId: '',
   usuarioId: '',
-  fecha: hoy,
+  fecha: fechaHoyLocal(),
   esCompartido: false,
   tipoCompartido: TipoGastoCompartido.MitadMitad,
   porcentajeMio: 50,
@@ -74,6 +77,7 @@ export default function FormularioGasto({ gastoInicial, onGuardado, onCancelar }
   )
   const [guardando, setGuardando] = useState(false)
   const [errores, setErrores] = useState<Partial<Record<keyof Campos, string>>>({})
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
 
   function set<K extends keyof Campos>(campo: K, valor: Campos[K]) {
     setForm((p) => ({ ...p, [campo]: valor }))
@@ -127,6 +131,7 @@ export default function FormularioGasto({ gastoInicial, onGuardado, onCancelar }
       : undefined
 
     setGuardando(true)
+    setErrorGuardar(null)
     try {
       if (gastoInicial) {
         await gastosRepository.actualizar(gastoInicial.id, {
@@ -162,6 +167,9 @@ export default function FormularioGasto({ gastoInicial, onGuardado, onCancelar }
         await gastosRepository.crear(gasto)
       }
       onGuardado()
+    } catch (err) {
+      console.error('[FormularioGasto] error al guardar:', err)
+      setErrorGuardar('No se pudo guardar. Intentá de nuevo.')
     } finally {
       setGuardando(false)
     }
@@ -435,6 +443,11 @@ export default function FormularioGasto({ gastoInicial, onGuardado, onCancelar }
           )}
         </AnimatePresence>
       </div>
+
+      {/* Error de guardado */}
+      {errorGuardar && (
+        <p className="text-sm text-destructive text-center py-1">{errorGuardar}</p>
+      )}
 
       {/* Acciones */}
       <div className="flex gap-3 pt-2">
