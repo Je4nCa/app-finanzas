@@ -28,7 +28,7 @@ type PanelFijo =
   | { tipo: 'nuevo' }
   | { tipo: 'editar'; gasto: GastoFijo }
 
-function labelMesPago(mes: number, anio: number, mesActual: number, anioActual: number): string {
+function labelMesPago(mes: number, anio: number, anioActual: number): string {
   if (anio === anioActual) return MESES[mes - 1]
   return `${MESES[mes - 1]} ${anio}`
 }
@@ -284,7 +284,7 @@ export default function Gastos() {
                   const tarjeta = tarjetaMap.get(gasto.tarjetaId)
                   if (tarjeta && tarjeta.tipo === 'credito' && tarjeta.diaCierre) {
                     const { anio: pAnio, mes: pMes } = mesDePago(gasto.fecha, tarjeta.diaCierre)
-                    badgePago = `Pago: ${labelMesPago(pMes, pAnio, mes, anio)}`
+                    badgePago = `Pago: ${labelMesPago(pMes, pAnio, anio)}`
                   }
                 }
 
