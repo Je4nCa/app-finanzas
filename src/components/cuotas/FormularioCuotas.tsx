@@ -13,12 +13,14 @@ import { TipoGastoCompartido } from '@/types'
 
 const PRESETS_CUOTAS = [3, 6, 12, 18, 24]
 
+function pad(n: number) { return String(n).padStart(2, '0') }
+
 interface Campos {
   nombreProducto: string
   montoTotal: string
   moneda: Moneda
   numeroCuotas: number
-  fechaInicio: string
+  fechaCompra: string
   tarjetaId: string
   usuarioId: string
   esCompartido: boolean
@@ -26,18 +28,18 @@ interface Campos {
   porcentajeMio: number
 }
 
-function mesHoyLocal(): string {
+function fechaHoyLocal(): string {
   const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-const hoyMes = mesHoyLocal()
+const hoyFecha = fechaHoyLocal()
 
 const INICIAL: Campos = {
   nombreProducto: '',
   montoTotal: '',
   moneda: 'USD',
   numeroCuotas: 12,
-  fechaInicio: hoyMes,
+  fechaCompra: hoyFecha,
   tarjetaId: '',
   usuarioId: '',
   esCompartido: false,
@@ -74,35 +76,29 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
   const montoCuota = form.numeroCuotas > 0 ? montoNum / form.numeroCuotas : 0
   const simbolo    = form.moneda === 'USD' ? '$' : '₡'
 
-  const [anioInicio, mesInicio] = form.fechaInicio
-    ? form.fechaInicio.split('-').map(Number)
-    : [0, 0]
+  // Compute primerMes from fechaCompra + tarjeta.diaCierre
+  const tarjetaSeleccionada = tarjetas?.find((t) => t.id === form.tarjetaId)
+  const primerMes = (() => {
+    if (!form.tarjetaId || !form.fechaCompra || !tarjetaSeleccionada?.diaCierre) return null
+    return mesDePago(form.fechaCompra, tarjetaSeleccionada.diaCierre)
+  })()
 
-  // Aviso de ciclo de facturación: si la compra es HOY, ¿en qué mes cae el primer cobro?
-  const avisoCorte = (() => {
-    const tarjeta = tarjetas?.find((t) => t.id === form.tarjetaId)
-    if (!tarjeta || tarjeta.tipo !== 'credito' || !tarjeta.diaCierre) return null
-    const hoy = new Date()
-    const diaHoy = hoy.getDate()
-    const mesHoy = hoy.getMonth() + 1
-    const anioHoy = hoy.getFullYear()
-    const { anio: anioSug, mes: mesSug } = mesDePago(
-      `${anioHoy}-${String(mesHoy).padStart(2, '0')}-${String(diaHoy).padStart(2, '0')}`,
-      tarjeta.diaCierre
-    )
-    const despuesDelCorte = diaHoy > tarjeta.diaCierre
-    return {
-      diaCierre: tarjeta.diaCierre,
-      despuesDelCorte,
-      primerMesSugerido: `${anioSug}-${String(mesSug).padStart(2, '0')}`,
-      labelSugerido: labelMes(mesSug, anioSug),
-    }
+  // Derive fechaInicio from primerMes
+  const fechaInicioDerivada = primerMes
+    ? `${primerMes.anio}-${pad(primerMes.mes)}-01`
+    : null
+
+  // Determine if primer cobro shifted to next month
+  const primerMesDespazado = (() => {
+    if (!primerMes || !form.fechaCompra) return false
+    const [, mmStr] = form.fechaCompra.split('-')
+    return parseInt(mmStr) !== primerMes.mes
   })()
 
   const fechaFin = (() => {
-    if (!form.fechaInicio) return ''
-    const totalMeses = mesInicio - 1 + form.numeroCuotas - 1
-    return labelMes((totalMeses % 12) + 1, anioInicio + Math.floor(totalMeses / 12))
+    if (!primerMes) return ''
+    const totalMeses = primerMes.mes - 1 + form.numeroCuotas - 1
+    return labelMes((totalMeses % 12) + 1, primerMes.anio + Math.floor(totalMeses / 12))
   })()
 
   const partes = form.esCompartido && montoNum > 0
@@ -118,7 +114,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
     if (!form.montoTotal || isNaN(montoNum) || montoNum <= 0) e.montoTotal = 'Monto inválido'
     if (!form.tarjetaId)   e.tarjetaId   = 'Requerido'
     if (!form.usuarioId)   e.usuarioId   = 'Requerido'
-    if (!form.fechaInicio) e.fechaInicio = 'Requerido'
+    if (!form.fechaCompra) e.fechaCompra = 'Requerido'
     setErrores(e)
     return Object.keys(e).length === 0
   }
@@ -126,6 +122,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validar()) return
+    if (!primerMes || !fechaInicioDerivada) return
 
     const detalleCompartido = form.esCompartido
       ? {
@@ -138,16 +135,17 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
 
     setGuardando(true)
     try {
-      const totalMeses = mesInicio - 1 + form.numeroCuotas - 1
+      const totalMeses = primerMes.mes - 1 + form.numeroCuotas - 1
       const plan = {
         id:              crypto.randomUUID(),
         nombreProducto:  form.nombreProducto.trim(),
         montoTotal:      montoNum,
         numeroCuotas:    form.numeroCuotas,
         montoCuota:      Number(montoCuota.toFixed(2)),
-        fechaInicio:     `${form.fechaInicio}-01`,
-        fechaFin:        `${anioInicio + Math.floor(totalMeses / 12)}-${String((totalMeses % 12) + 1).padStart(2, '0')}-01`,
+        fechaInicio:     fechaInicioDerivada,
+        fechaFin:        `${primerMes.anio + Math.floor(totalMeses / 12)}-${pad((totalMeses % 12) + 1)}-01`,
         tarjetaId:       form.tarjetaId,
+        fechaCompra:     form.fechaCompra,
         usuarioId:       form.usuarioId,
         moneda:          form.moneda,
         esCompartido:    form.esCompartido,
@@ -228,29 +226,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
         </div>
       </Campo>
 
-      {/* Aviso de corte */}
-      {avisoCorte && (
-        <div className={cn(
-          'rounded-xl px-3.5 py-2.5 text-xs leading-relaxed',
-          avisoCorte.despuesDelCorte
-            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-        )}>
-          {avisoCorte.despuesDelCorte
-            ? <>Hoy pasaste el corte del día {avisoCorte.diaCierre}. El primer cobro cae en <strong>{avisoCorte.labelSugerido}</strong>.</>
-            : <>Aún no llegaste al corte del día {avisoCorte.diaCierre}. El primer cobro puede ser <strong>{avisoCorte.labelSugerido}</strong>.</>
-          }
-        </div>
-      )}
-
-      {/* Mes de inicio */}
-      <Campo label="Primer mes de cobro" error={errores.fechaInicio}>
-        <input type="month" value={form.fechaInicio}
-          onChange={(e) => set('fechaInicio', e.target.value)}
-          className={inputClass(!!errores.fechaInicio)} />
-      </Campo>
-
-      {/* Tarjeta */}
+      {/* Tarjeta — shown before fechaCompra so diaCierre is known */}
       <Campo label="Tarjeta" error={errores.tarjetaId}>
         <select value={form.tarjetaId} onChange={(e) => seleccionarTarjeta(e.target.value)}
           className={inputClass(!!errores.tarjetaId)}>
@@ -260,6 +236,32 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
           ))}
         </select>
       </Campo>
+
+      {/* Fecha de compra */}
+      <Campo label="Fecha de compra / procesamiento" error={errores.fechaCompra}>
+        <input
+          type="date"
+          value={form.fechaCompra}
+          onChange={(e) => set('fechaCompra', e.target.value)}
+          className={inputClass(!!errores.fechaCompra)}
+        />
+      </Campo>
+
+      {/* Primer cobro computed result */}
+      {form.tarjetaId && form.fechaCompra && primerMes && (
+        <div className={cn(
+          'flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs leading-relaxed',
+          primerMesDespazado
+            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+        )}>
+          <span>Primer cobro:</span>
+          <span className="font-bold">{labelMes(primerMes.mes, primerMes.anio)}</span>
+          {primerMesDespazado && (
+            <span className="text-amber-400/70 ml-auto">Pasó el corte → siguiente mes</span>
+          )}
+        </div>
+      )}
 
       {/* Usuario */}
       <Campo label="¿Quién lo financia?" error={errores.usuarioId}>
@@ -362,7 +364,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
       </div>
 
       {/* Preview resumen */}
-      {montoNum > 0 && form.fechaInicio && (
+      {montoNum > 0 && primerMes && (
         <div className="rounded-2xl bg-secondary border border-border px-4 py-3 flex flex-col gap-1.5">
           <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Resumen</p>
           <div className="flex justify-between text-sm">
@@ -372,7 +374,7 @@ export default function FormularioCuotas({ onGuardado, onCancelar }: Props) {
             </span>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{labelMes(mesInicio, anioInicio)}</span>
+            <span>{labelMes(primerMes.mes, primerMes.anio)}</span>
             <span>→</span>
             <span>{fechaFin}</span>
           </div>

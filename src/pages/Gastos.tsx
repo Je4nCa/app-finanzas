@@ -1,17 +1,18 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { gastosRepository, gastosFijosRepository } from '@/repositories'
 import { useGastosStore } from '@/store'
 import { CATEGORIA_MAP } from '@/constants/categorias'
 import { etiquetaSplit } from '@/services/compartido.service'
+import { mesDePago } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
 import FormularioGasto from '@components/gastos/FormularioGasto'
 import FormularioGastoFijo from '@components/gastos/FormularioGastoFijo'
-import type { Gasto, GastoFijo } from '@/types'
+import type { Gasto, GastoFijo, TarjetaCredito, Usuario } from '@/types'
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -27,11 +28,34 @@ type PanelFijo =
   | { tipo: 'nuevo' }
   | { tipo: 'editar'; gasto: GastoFijo }
 
+function labelMesPago(mes: number, anio: number, mesActual: number, anioActual: number): string {
+  if (anio === anioActual) return MESES[mes - 1]
+  return `${MESES[mes - 1]} ${anio}`
+}
+
 export default function Gastos() {
-  const { periodoActivo } = useGastosStore()
-  const { anio, mes } = periodoActivo
+  const setPeriodo = useGastosStore((s) => s.setPeriodo)
+
+  const ahora = new Date()
+  const [periodo, setPeriodoLocal] = useState({ anio: ahora.getFullYear(), mes: ahora.getMonth() + 1 })
+  const { anio, mes } = periodo
+
+  function navMes(delta: number) {
+    let nuevoMes = mes + delta
+    let nuevoAnio = anio
+    if (nuevoMes < 1) { nuevoMes = 12; nuevoAnio-- }
+    if (nuevoMes > 12) { nuevoMes = 1; nuevoAnio++ }
+    const nuevo = { anio: nuevoAnio, mes: nuevoMes }
+    setPeriodoLocal(nuevo)
+    setPeriodo(nuevo)
+  }
 
   const [tab, setTab] = useState<Tab>('variables')
+
+  // Filter state (variables tab only)
+  const [filtroTarjeta, setFiltroTarjeta] = useState<string | null>(null)
+  const [filtroCompartido, setFiltroCompartido] = useState(false)
+  const [filtroUsuario, setFiltroUsuario] = useState<string | null>(null)
 
   const [panelGasto, setPanelGasto] = useState<PanelGasto>({ tipo: 'ninguno' })
   const [eliminandoGastoId, setEliminandoGastoId] = useState<string | null>(null)
@@ -42,17 +66,38 @@ export default function Gastos() {
   const mostrarFormGasto = panelGasto.tipo !== 'ninguno'
   const mostrarFormFijo  = panelFijo.tipo  !== 'ninguno'
 
-  const prefijo      = `${anio}-${String(mes).padStart(2, '0')}`
+  const prefijo = `${anio}-${String(mes).padStart(2, '0')}`
+
   const todosGastos      = useCollection<Gasto>(() => hCol('gastos'), [])
   const todosGastosFijos = useCollection<GastoFijo>(() => hCol('gastosFijos'), [])
+  const tarjetas         = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
+  const usuarios         = useCollection<Usuario>(() => hCol('usuarios'), [])
 
-  const gastos = useMemo(
+  const gastosMes = useMemo(
     () => todosGastos
       ?.filter((g) => g.fecha.startsWith(prefijo))
       .sort((a, b) => b.fecha.localeCompare(a.fecha)),
     [todosGastos, prefijo]
   )
+
+  const gastos = useMemo(() => {
+    if (!gastosMes) return gastosMes
+    return gastosMes.filter((g) => {
+      if (filtroTarjeta && g.tarjetaId !== filtroTarjeta) return false
+      if (filtroCompartido && !g.esCompartido) return false
+      if (filtroUsuario && g.usuarioId !== filtroUsuario) return false
+      return true
+    })
+  }, [gastosMes, filtroTarjeta, filtroCompartido, filtroUsuario])
+
   const gastosFijos = useMemo(() => todosGastosFijos, [todosGastosFijos])
+
+  // Build tarjetaMap for quick lookup
+  const tarjetaMap = useMemo(() => {
+    const map = new Map<string, TarjetaCredito>()
+    tarjetas?.forEach((t) => map.set(t.id, t))
+    return map
+  }, [tarjetas])
 
   async function handleEliminarGasto(id: string) {
     await gastosRepository.eliminar(id)
@@ -68,10 +113,14 @@ export default function Gastos() {
     await gastosFijosRepository.actualizar(gasto.id, { activo: !gasto.activo })
   }
 
+  const chipBase = 'h-7 px-2.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap'
+  const chipSelected = 'bg-primary text-primary-foreground'
+  const chipUnselected = 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+
   return (
     <PageWrapper className="px-4 py-6 flex flex-col gap-6">
 
-      {/* Encabezado */}
+      {/* Encabezado con navegación de mes */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Gastos</h1>
@@ -82,18 +131,37 @@ export default function Gastos() {
           </p>
         </div>
 
-        {!mostrarFormGasto && !mostrarFormFijo && (
+        <div className="flex items-center gap-1">
+          {/* Month navigation */}
           <button
-            onClick={() => tab === 'variables'
-              ? setPanelGasto({ tipo: 'nuevo' })
-              : setPanelFijo({ tipo: 'nuevo' })
-            }
-            className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+            onClick={() => navMes(-1)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
-            <Plus size={16} />
-            Nuevo
+            <ChevronLeft size={16} />
           </button>
-        )}
+          <span className="text-sm font-semibold min-w-[70px] text-center">
+            {MESES[mes - 1]} {anio}
+          </span>
+          <button
+            onClick={() => navMes(1)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          {!mostrarFormGasto && !mostrarFormFijo && (
+            <button
+              onClick={() => tab === 'variables'
+                ? setPanelGasto({ tipo: 'nuevo' })
+                : setPanelFijo({ tipo: 'nuevo' })
+              }
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold ml-1"
+            >
+              <Plus size={16} />
+              Nuevo
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -119,6 +187,59 @@ export default function Gastos() {
       {/* ── TAB VARIABLES ─────────────────────────────────── */}
       {tab === 'variables' && (
         <>
+          {/* Filter bar — only when not in form */}
+          {!mostrarFormGasto && (
+            <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
+              {/* Todas */}
+              <button
+                onClick={() => { setFiltroTarjeta(null); setFiltroCompartido(false); setFiltroUsuario(null) }}
+                className={cn(chipBase, !filtroTarjeta && !filtroCompartido && !filtroUsuario ? chipSelected : chipUnselected)}
+              >
+                Todas
+              </button>
+
+              {/* Tarjetas */}
+              {tarjetas?.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setFiltroTarjeta(filtroTarjeta === t.id ? null : t.id)}
+                  className={cn(chipBase, filtroTarjeta === t.id ? chipSelected : chipUnselected, 'flex items-center gap-1.5')}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: t.color }}
+                  />
+                  {t.nombre}
+                </button>
+              ))}
+
+              {/* Compartidos */}
+              <button
+                onClick={() => setFiltroCompartido(!filtroCompartido)}
+                className={cn(chipBase, filtroCompartido ? chipSelected : chipUnselected)}
+              >
+                Compartidos
+              </button>
+
+              {/* Usuarios */}
+              {usuarios?.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setFiltroUsuario(filtroUsuario === u.id ? null : u.id)}
+                  className={cn(chipBase, filtroUsuario === u.id ? chipSelected : chipUnselected, 'flex items-center gap-1.5')}
+                >
+                  <span
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                    style={{ backgroundColor: u.color }}
+                  >
+                    {u.nombre.charAt(0)}
+                  </span>
+                  {u.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Formulario nuevo / editar */}
           <AnimatePresence>
             {mostrarFormGasto && (
@@ -156,6 +277,17 @@ export default function Gastos() {
             <div className="flex flex-col gap-2">
               {gastos.map((gasto) => {
                 const cat = CATEGORIA_MAP[gasto.categoriaId]
+
+                // Badge "Pago: Xxx" for credit card expenses
+                let badgePago: string | null = null
+                if (gasto.tarjetaId) {
+                  const tarjeta = tarjetaMap.get(gasto.tarjetaId)
+                  if (tarjeta && tarjeta.tipo === 'credito' && tarjeta.diaCierre) {
+                    const { anio: pAnio, mes: pMes } = mesDePago(gasto.fecha, tarjeta.diaCierre)
+                    badgePago = `Pago: ${labelMesPago(pMes, pAnio, mes, anio)}`
+                  }
+                }
+
                 return (
                   <div key={gasto.id}>
                     <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-card border border-border">
@@ -167,11 +299,16 @@ export default function Gastos() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{gasto.titulo}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <p className="text-xs text-muted-foreground">{gasto.fecha}</p>
                           {gasto.esCompartido && gasto.detalleCompartido && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary leading-none">
                               {etiquetaSplit(gasto.detalleCompartido)}
+                            </span>
+                          )}
+                          {badgePago && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground leading-none">
+                              {badgePago}
                             </span>
                           )}
                         </div>

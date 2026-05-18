@@ -27,6 +27,8 @@ export interface PlanCuotas {
   /** Mes y año de la última cuota (calculado al crear) */
   fechaFin: FechaISO
   tarjetaId: ID
+  /** Fecha real de la compra (YYYY-MM-DD), usada para calcular el primer mes de cobro */
+  fechaCompra?: string
   usuarioId: ID
   moneda: Moneda
   esCompartido: boolean
