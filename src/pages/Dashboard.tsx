@@ -354,6 +354,7 @@ export default function Dashboard() {
   const usuarios         = useCollection<Usuario>(() => hCol('usuarios'), [])
   const tarjetas         = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
   const todosSalarios    = useCollection<Salario>(() => hCol('salarios'), [])
+  const todosAbonos      = useCollection<{ id: string; usuarioId: string; anio: number; mes: number; monto: number; moneda: string }>(() => hCol('abonosTarjeta'), [])
 
   const diaCierrePorTarjeta = useMemo(() => {
     const map: Record<string, number | undefined> = {}
@@ -387,11 +388,34 @@ export default function Dashboard() {
     [todosSalarios, periodo.anio, periodo.mes]
   )
 
-  const totales = useMemo(() => {
+  const totalesBase = useMemo(() => {
     if (!gastos || !cuotas || !planes || !gastosFijos || !usuarios) return null
     const cuotasPendientes = cuotas.filter((c) => c.estado !== EstadoCuota.Pagada)
     return calcularTotales(gastos, cuotasPendientes, planes, gastosFijos, usuarios, monedaBase, tipoCambio)
   }, [gastos, cuotas, planes, gastosFijos, usuarios, monedaBase, tipoCambio])
+
+  // Subtract abonos from each user's total for the current period
+  const totales = useMemo(() => {
+    if (!totalesBase) return null
+    const abonosPeriodo = todosAbonos?.filter((a) => a.anio === periodo.anio && a.mes === periodo.mes) ?? []
+    if (abonosPeriodo.length === 0) return totalesBase
+
+    const porUsuario = { ...totalesBase.porUsuario }
+    let totalDescontado = 0
+    for (const a of abonosPeriodo) {
+      if (!a.usuarioId) continue
+      const montoEnBase = toBase(a.monto, a.moneda as 'USD' | 'CRC', monedaBase, tipoCambio)
+      if (porUsuario[a.usuarioId] !== undefined) {
+        porUsuario[a.usuarioId] = Math.max(0, porUsuario[a.usuarioId] - montoEnBase)
+        totalDescontado += montoEnBase
+      }
+    }
+    return {
+      ...totalesBase,
+      porUsuario,
+      total: Math.max(0, totalesBase.total - totalDescontado),
+    }
+  }, [totalesBase, todosAbonos, periodo, monedaBase, tipoCambio])
 
   // Per-user expenses in their salary currency (determined by their monedaPreferida)
   const gastosPorUsuarioEnSuMoneda = useMemo(() => {
@@ -420,6 +444,7 @@ export default function Dashboard() {
       planesCuotas: planes,
       cuotasMensuales: cuotas ?? [],
       tarjetas,
+      abonos: (todosAbonos ?? []) as Parameters<typeof generarReporteExcel>[0]['abonos'],
       tipoCambio,
     })
   }

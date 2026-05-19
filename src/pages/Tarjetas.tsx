@@ -4,13 +4,13 @@ import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CreditCard, Check, X }
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { tarjetasRepository, abonosTarjetaRepository, montosManualesRepository } from '@/repositories'
-import { useMonedaStore } from '@/store'
+import { useMonedaStore, useUsuarioStore } from '@/store'
 import { periodoFacturacion } from '@/lib/billingCycle'
 import { cn } from '@/lib/utils'
 import { nanoid } from 'nanoid'
 import PageWrapper from '@components/ui/PageWrapper'
 import FormularioTarjeta from '@components/tarjetas/FormularioTarjeta'
-import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas, AbonoTarjeta, MontoManualTarjeta, Moneda } from '@/types'
+import type { TarjetaCredito, Gasto, GastoFijo, CuotaMensual, PlanCuotas, AbonoTarjeta, MontoManualTarjeta, Moneda, Usuario } from '@/types'
 
 const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -61,12 +61,16 @@ function SaldoDebito({ tarjeta, gastos }: { tarjeta: TarjetaCredito; gastos: Gas
 interface FormAbonoProps {
   tarjeta: TarjetaCredito
   periodo: { anio: number; mes: number }
+  usuarios: Usuario[]
+  usuarioActivoId?: string
   onGuardado: () => void
   onCancelar: () => void
 }
 
-function FormAbono({ tarjeta, periodo, onGuardado, onCancelar }: FormAbonoProps) {
+function FormAbono({ tarjeta, periodo, usuarios, usuarioActivoId, onGuardado, onCancelar }: FormAbonoProps) {
   const hoy = new Date().toISOString().slice(0, 10)
+  const defaultUserId = usuarioActivoId ?? usuarios[0]?.id ?? ''
+  const [selectedUserId, setSelectedUserId] = useState(defaultUserId)
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(hoy)
   const [notas, setNotas] = useState('')
@@ -78,6 +82,7 @@ function FormAbono({ tarjeta, periodo, onGuardado, onCancelar }: FormAbonoProps)
     const montoNum = parseFloat(monto.replace(/,/g, ''))
     if (!montoNum || montoNum <= 0) { setError('Ingresa un monto válido'); return }
     if (!fecha) { setError('Selecciona una fecha'); return }
+    if (!selectedUserId) { setError('Seleccioná quién realizó el pago'); return }
 
     setGuardando(true)
     setError(null)
@@ -85,6 +90,7 @@ function FormAbono({ tarjeta, periodo, onGuardado, onCancelar }: FormAbonoProps)
       const abono: AbonoTarjeta = {
         id: nanoid(),
         tarjetaId: tarjeta.id,
+        usuarioId: selectedUserId,
         anio: periodo.anio,
         mes: periodo.mes,
         monto: montoNum,
@@ -107,6 +113,34 @@ function FormAbono({ tarjeta, periodo, onGuardado, onCancelar }: FormAbonoProps)
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 pt-3 border-t border-border mt-3">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Registrar abono</p>
+
+      {/* ¿Quién pagó? */}
+      <div>
+        <label className="text-xs text-muted-foreground">¿Quién realizó el pago?</label>
+        <div className="flex gap-2 mt-1">
+          {usuarios.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => setSelectedUserId(u.id)}
+              className={cn(
+                'flex-1 h-9 flex items-center justify-center gap-2 rounded-lg border text-xs font-medium transition-colors',
+                selectedUserId === u.id
+                  ? 'border-transparent text-white'
+                  : 'border-border text-muted-foreground bg-secondary hover:bg-secondary/80'
+              )}
+              style={selectedUserId === u.id ? { backgroundColor: u.color } : {}}
+            >
+              <span
+                className="w-4 h-4 rounded-full shrink-0"
+                style={{ backgroundColor: selectedUserId === u.id ? 'rgba(255,255,255,0.4)' : u.color }}
+              />
+              {u.nombre}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex gap-2">
         <div className="flex-1">
           <label className="text-xs text-muted-foreground">Monto ({simbolo})</label>
@@ -172,6 +206,8 @@ interface ResumenCreditoProps {
   cuotasMensuales: CuotaMensual[]
   abonos: AbonoTarjeta[]
   montoManual?: MontoManualTarjeta
+  usuarios: Usuario[]
+  usuarioActivoId?: string
   tipoCambio: number
 }
 
@@ -184,6 +220,8 @@ function ResumenCredito({
   cuotasMensuales,
   abonos,
   montoManual,
+  usuarios,
+  usuarioActivoId,
   tipoCambio,
 }: ResumenCreditoProps) {
   const [mostrarFormAbono, setMostrarFormAbono] = useState(false)
@@ -384,14 +422,24 @@ function ResumenCredito({
       {(abonosPeriodo.length > 0 || totalAbonos > 0) && (
         <div className="flex flex-col gap-1 pt-1 border-t border-border">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Abonos registrados</p>
-          {abonosPeriodo.map((abono) => (
+          {abonosPeriodo.map((abono) => {
+            const pagador = abono.usuarioId ? usuarios.find((u) => u.id === abono.usuarioId) : null
+            return (
             <div key={abono.id}>
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="text-green-600 dark:text-green-400 font-medium">
                     -{simbolo}{conv(abono.monto, abono.moneda).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
-                  {abono.notas && <span className="text-muted-foreground truncate max-w-[120px]">{abono.notas}</span>}
+                  {pagador && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-full text-white leading-none shrink-0"
+                      style={{ backgroundColor: pagador.color }}
+                    >
+                      {pagador.nombre}
+                    </span>
+                  )}
+                  {abono.notas && <span className="text-muted-foreground truncate max-w-[80px]">{abono.notas}</span>}
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-muted-foreground">{fmtFecha(abono.fecha)}</span>
@@ -436,7 +484,7 @@ function ResumenCredito({
                 )}
               </AnimatePresence>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -453,6 +501,8 @@ function ResumenCredito({
         <FormAbono
           tarjeta={tarjeta}
           periodo={periodo}
+          usuarios={usuarios}
+          usuarioActivoId={usuarioActivoId}
           onGuardado={() => setMostrarFormAbono(false)}
           onCancelar={() => setMostrarFormAbono(false)}
         />
@@ -465,6 +515,7 @@ function ResumenCredito({
 
 export default function Tarjetas() {
   const tipoCambio = useMonedaStore((s) => s.tipoCambio)
+  const usuarioActivo = useUsuarioStore((s) => s.usuarioActivo)
 
   const ahora = new Date()
   const [periodo, setPeriodo] = useState({ anio: ahora.getFullYear(), mes: ahora.getMonth() + 1 })
@@ -486,6 +537,7 @@ export default function Tarjetas() {
   const cuotasMensuales  = useCollection<CuotaMensual>(() => hCol('cuotasMensuales'), [])
   const abonosTarjeta      = useCollection<AbonoTarjeta>(() => hCol('abonosTarjeta'), [])
   const montosManuales     = useCollection<MontoManualTarjeta>(() => hCol('montosManualesTarjeta'), [])
+  const usuarios           = useCollection<Usuario>(() => hCol('usuarios'), [])
 
   const [panel, setPanel] = useState<PanelActivo>({ tipo: 'ninguno' })
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
@@ -624,6 +676,8 @@ export default function Tarjetas() {
                     montoManual={montosManuales?.find(
                       (m) => m.tarjetaId === tarjeta.id && m.anio === periodo.anio && m.mes === periodo.mes
                     )}
+                    usuarios={usuarios ?? []}
+                    usuarioActivoId={usuarioActivo?.id}
                     tipoCambio={tipoCambio}
                   />
                 )}

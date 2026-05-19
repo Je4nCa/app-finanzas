@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 import { calcularPartes } from '@/services/compartido.service'
 import { periodoFacturacion } from '@/lib/billingCycle'
 import type {
-  Usuario, Gasto, GastoFijo, PlanCuotas, CuotaMensual, TarjetaCredito,
+  Usuario, Gasto, GastoFijo, PlanCuotas, CuotaMensual, TarjetaCredito, AbonoTarjeta,
 } from '@/types'
 
 interface DatosReporte {
@@ -13,6 +13,7 @@ interface DatosReporte {
   planesCuotas: PlanCuotas[]
   cuotasMensuales: CuotaMensual[]
   tarjetas: TarjetaCredito[]
+  abonos: AbonoTarjeta[]
   tipoCambio: number
 }
 
@@ -36,7 +37,7 @@ function agregarHojaUsuario(
   usuario: Usuario,
   datos: DatosReporte,
 ): void {
-  const { periodo, gastos, gastosFijos, planesCuotas, cuotasMensuales, tarjetas, tipoCambio } = datos
+  const { periodo, gastos, gastosFijos, planesCuotas, cuotasMensuales, tarjetas, abonos, tipoCambio } = datos
   const otroUsuario = datos.usuarios.find((u) => u.id !== usuario.id)
   const simbolo = usuario.monedaPreferida === 'USD' ? '$' : '₡'
   const label = `${MESES[periodo.mes - 1]} ${periodo.anio}`
@@ -166,10 +167,34 @@ function agregarHojaUsuario(
   rows.push(['', '', '', 'Subtotal', +subtotalFijos.toFixed(2)])
   rows.push(sep())
 
+  // ── Adelantos de pago ──
+  const abonosPeriodo = abonos.filter(
+    (a) => a.usuarioId === usuario.id && a.anio === periodo.anio && a.mes === periodo.mes
+  )
+  let subtotalAbonos = 0
+  if (abonosPeriodo.length > 0) {
+    rows.push(h('ADELANTOS DE PAGO'))
+    rows.push(['Fecha', 'Tarjeta', 'Moneda', 'Monto pagado', `En ${usuario.monedaPreferida}`, 'Notas'])
+    for (const a of abonosPeriodo) {
+      const montoConv = conv(a.monto, a.moneda)
+      subtotalAbonos += montoConv
+      rows.push([
+        a.fecha,
+        nombreTarjeta(a.tarjetaId, tarjetas),
+        a.moneda,
+        a.monto,
+        +montoConv.toFixed(2),
+        a.notas ?? '—',
+      ])
+    }
+    rows.push(['', '', '', 'Subtotal', +subtotalAbonos.toFixed(2)])
+    rows.push(sep())
+  }
+
   // ── Gran total ──
-  const granTotal = subtotalVar + subtotalCuotas + subtotalFijos
-  rows.push(['', '', '', '', '', `TOTAL ${usuario.nombre.toUpperCase()}`, +granTotal.toFixed(2)])
-  rows.push([`${simbolo}${granTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, '', '', '', '', '', ''])
+  const granTotal = subtotalVar + subtotalCuotas + subtotalFijos - subtotalAbonos
+  rows.push(['', '', '', '', '', `TOTAL NETO ${usuario.nombre.toUpperCase()}`, +granTotal.toFixed(2)])
+  rows.push([`${simbolo}${Math.max(0, granTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, '', '', '', '', '', ''])
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
 

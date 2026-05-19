@@ -32,6 +32,8 @@ export interface TarjetaCredito {
 export interface AbonoTarjeta {
   id: ID
   tarjetaId: ID
+  /** Usuario que realizó el pago adelantado */
+  usuarioId: ID
   /** Período de facturación al que se aplica el abono */
   anio: number
   mes: number
