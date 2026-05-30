@@ -9,6 +9,7 @@ const Dashboard        = lazy(() => import('@pages/Dashboard'))
 const Gastos           = lazy(() => import('@pages/Gastos'))
 const Tarjetas         = lazy(() => import('@pages/Tarjetas'))
 const TasaCero         = lazy(() => import('@pages/TasaCero'))
+const Pagos            = lazy(() => import('@pages/Pagos'))
 const Ajustes          = lazy(() => import('@pages/Ajustes'))
 
 const wrap = (Component: React.ComponentType) => (
@@ -34,6 +35,7 @@ export const router = createHashRouter([
       { path: 'dashboard',  element: wrap(Dashboard)  },
       { path: 'gastos',     element: wrap(Gastos)     },
       { path: 'tarjetas',   element: wrap(Tarjetas)   },
+      { path: 'pagos',      element: wrap(Pagos)      },
       { path: 'tasa-cero',  element: wrap(TasaCero)   },
       { path: 'ajustes',    element: wrap(Ajustes)    },
     ],

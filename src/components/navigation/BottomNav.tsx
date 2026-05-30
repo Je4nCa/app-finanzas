@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Receipt, CreditCard, Percent, Settings } from 'lucide-react'
+import { LayoutDashboard, Receipt, CreditCard, Wallet, Percent, Settings } from 'lucide-react'
 import { cn } from '@lib/utils'
 import { motion } from 'framer-motion'
 
@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { a: '/dashboard',  icono: LayoutDashboard, etiqueta: 'Inicio'     },
   { a: '/gastos',     icono: Receipt,         etiqueta: 'Gastos'     },
   { a: '/tarjetas',   icono: CreditCard,      etiqueta: 'Tarjetas'   },
+  { a: '/pagos',      icono: Wallet,          etiqueta: 'Pagos'      },
   { a: '/tasa-cero',  icono: Percent,         etiqueta: 'Tasa cero'  },
   { a: '/ajustes',    icono: Settings,        etiqueta: 'Ajustes'    },
 ]
