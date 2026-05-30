@@ -177,7 +177,7 @@ function PagoCard({ tarjeta, resumen, usuarios }: PagoCardProps) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({})
   const simbolo = tarjeta.moneda === 'USD' ? '$' : '₡'
 
-  const { diasVenc, etiquetaVenc, colorVenc } = useMemo(() => {
+  const { etiquetaVenc, colorVenc } = useMemo(() => {
     if (!resumen.fechaPago) return { diasVenc: null, etiquetaVenc: '', colorVenc: 'text-muted-foreground' }
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
     const pago = new Date(resumen.fechaPago); pago.setHours(0, 0, 0, 0)
@@ -192,7 +192,7 @@ function PagoCard({ tarjeta, resumen, usuarios }: PagoCardProps) {
       : dias <= 1 ? 'text-amber-500'
       : dias <= 5 ? 'text-amber-400'
       : 'text-muted-foreground'
-    return { diasVenc: dias, etiquetaVenc: texto, colorVenc: color }
+    return { etiquetaVenc: texto, colorVenc: color }
   }, [resumen.fechaPago])
 
   return (
