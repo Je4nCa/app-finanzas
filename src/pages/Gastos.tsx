@@ -59,6 +59,8 @@ export default function Gastos() {
 
   const [tab, setTab] = useState<Tab>('variables')
 
+  const [modoFecha, setModoFecha] = useState<'compra' | 'pago'>('compra')
+
   const [filtroTarjeta, setFiltroTarjeta] = useState<string | null>(null)
   const [filtroCompartido, setFiltroCompartido] = useState(false)
   const [filtroUsuario, setFiltroUsuario] = useState<string | null>(null)
@@ -79,11 +81,27 @@ export default function Gastos() {
   const tarjetas         = useCollection<TarjetaCredito>(() => hCol('tarjetas'), [])
   const usuarios         = useCollection<Usuario>(() => hCol('usuarios'), [])
 
+  // tarjetaMap needs to be before gastosMes so we can use it in the date filter
+  const tarjetaMap = useMemo(() => {
+    const map = new Map<string, TarjetaCredito>()
+    tarjetas?.forEach((t) => map.set(t.id, t))
+    return map
+  }, [tarjetas])
+
   const gastosMes = useMemo(
     () => todosGastos
-      ?.filter((g) => g.fecha.startsWith(prefijo))
+      ?.filter((g) => {
+        if (modoFecha === 'pago' && g.tarjetaId) {
+          const tarjeta = tarjetaMap.get(g.tarjetaId)
+          if (tarjeta?.tipo === 'credito' && tarjeta.diaCierre) {
+            const { anio: pAnio, mes: pMes } = mesDePago(g.fecha, tarjeta.diaCierre)
+            return pAnio === anio && pMes === mes
+          }
+        }
+        return g.fecha.startsWith(prefijo)
+      })
       .sort((a, b) => b.fecha.localeCompare(a.fecha)),
-    [todosGastos, prefijo]
+    [todosGastos, prefijo, modoFecha, tarjetaMap, anio, mes]
   )
 
   const gastos = useMemo(() => {
@@ -102,12 +120,6 @@ export default function Gastos() {
   }, [gastosMes, filtroTarjeta, filtroCompartido, filtroUsuario])
 
   const gastosFijos = useMemo(() => todosGastosFijos, [todosGastosFijos])
-
-  const tarjetaMap = useMemo(() => {
-    const map = new Map<string, TarjetaCredito>()
-    tarjetas?.forEach((t) => map.set(t.id, t))
-    return map
-  }, [tarjetas])
 
   // When a user filter is active, compute each user's total (their portions)
   const totalFiltrado = useMemo(() => {
@@ -210,6 +222,37 @@ export default function Gastos() {
       {/* ── TAB VARIABLES ─────────────────────────────────── */}
       {tab === 'variables' && (
         <>
+          {/* Modo de fecha */}
+          {!mostrarFormGasto && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground shrink-0">Ver gastos por:</span>
+              <div className="flex gap-1 p-0.5 rounded-lg bg-secondary">
+                <button
+                  onClick={() => setModoFecha('compra')}
+                  className={cn(
+                    'h-7 px-3 rounded-md text-xs font-medium transition-all',
+                    modoFecha === 'compra'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  Fecha de compra
+                </button>
+                <button
+                  onClick={() => setModoFecha('pago')}
+                  className={cn(
+                    'h-7 px-3 rounded-md text-xs font-medium transition-all',
+                    modoFecha === 'pago'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  Mes de pago
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Filter bar */}
           {!mostrarFormGasto && (
             <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
