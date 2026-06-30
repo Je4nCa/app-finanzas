@@ -5,9 +5,13 @@ import type { Usuario, TarjetaCredito, Gasto, GastoFijo, PlanCuotas, CuotaMensua
 
 export const DEMO_HOUSEHOLD = 'demo'
 
-export const isDemoMode   = () => localStorage.getItem('mamocitos_household') === DEMO_HOUSEHOLD
+export const isDemoMode    = () => localStorage.getItem('mamocitos_household') === DEMO_HOUSEHOLD
 export const enterDemoMode = () => { localStorage.setItem('mamocitos_household', DEMO_HOUSEHOLD); window.location.reload() }
-export const exitDemoMode  = () => { localStorage.removeItem('mamocitos_household'); window.location.reload() }
+export const exitDemoMode  = () => {
+  localStorage.removeItem('mamocitos_household')
+  localStorage.removeItem('usuario-activo') // clear persisted demo user
+  window.location.reload()
+}
 
 const dDoc = (col: string, id: string) =>
   doc(firestore, 'households', DEMO_HOUSEHOLD, col, id)
@@ -21,7 +25,7 @@ const NOW = new Date().toISOString()
 
 const USUARIOS: Usuario[] = [
   { id: 'demo-carlos', nombre: 'Carlos', monedaPreferida: 'USD', color: '#6366f1', creadoEn: NOW, actualizadoEn: NOW },
-  { id: 'demo-maria',  nombre: 'María',  monedaPreferida: 'CRC', color: '#ec4899', creadoEn: NOW, actualizadoEn: NOW },
+  { id: 'demo-maria',  nombre: 'Alicia', monedaPreferida: 'CRC', color: '#ec4899', creadoEn: NOW, actualizadoEn: NOW },
 ]
 
 const TARJETAS: TarjetaCredito[] = [
@@ -186,12 +190,14 @@ function sinUndefined(obj: object): Record<string, unknown> {
 }
 
 export async function seedDemoHousehold(): Promise<void> {
-  const snap = await getDocs(dCol('usuarios'))
-  if (!snap.empty) return // ya está sembrado
+  // Siempre actualiza los usuarios (para reflejar cambios de nombre)
+  await Promise.all(USUARIOS.map(u => setDoc(dDoc('usuarios', u.id), sinUndefined(u))))
+
+  // Solo siembra el resto si es la primera vez
+  const snap = await getDocs(dCol('gastos'))
+  if (!snap.empty) return
 
   const writes: Promise<void>[] = []
-
-  for (const u of USUARIOS)      writes.push(setDoc(dDoc('usuarios', u.id), sinUndefined(u)))
   for (const t of TARJETAS)      writes.push(setDoc(dDoc('tarjetas', t.id), sinUndefined(t)))
   for (const g of GASTOS)        writes.push(setDoc(dDoc('gastos', g.id), sinUndefined(g)))
   for (const f of GASTOS_FIJOS)  writes.push(setDoc(dDoc('gastosFijos', f.id), sinUndefined(f)))
