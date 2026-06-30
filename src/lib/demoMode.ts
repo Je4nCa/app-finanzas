@@ -1,6 +1,6 @@
 import { doc, setDoc, getDocs, collection } from 'firebase/firestore'
 import { firestore } from './firebase'
-import { EstadoCuota } from '@/types'
+import { EstadoCuota, TipoGastoCompartido, TipoRecurrencia } from '@/types'
 import type { Usuario, TarjetaCredito, Gasto, GastoFijo, PlanCuotas, CuotaMensual, AbonoTarjeta } from '@/types'
 
 export const DEMO_HOUSEHOLD = 'demo'
@@ -52,7 +52,7 @@ const GASTOS: Gasto[] = [
     id: 'demo-g2', titulo: 'Almuerzo Restaurante', monto: 28.50, moneda: 'USD',
     categoriaId: 'comida', tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
     tipoPago: 'tarjeta', fecha: '2026-05-08', esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
   {
@@ -71,14 +71,14 @@ const GASTOS: Gasto[] = [
     id: 'demo-g5', titulo: 'Uber Eats', monto: 22.00, moneda: 'USD',
     categoriaId: 'comida', tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
     tipoPago: 'tarjeta', fecha: '2026-05-27', esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
   {
     id: 'demo-g6', titulo: 'Alquiler de apartamento', monto: 450000, moneda: 'CRC',
     categoriaId: 'apartamento', tarjetaId: 'demo-mc', usuarioId: 'demo-maria',
     tipoPago: 'tarjeta', fecha: '2026-06-01', esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
   {
@@ -91,7 +91,7 @@ const GASTOS: Gasto[] = [
     id: 'demo-g8', titulo: 'Cinépolis', monto: 15000, moneda: 'CRC',
     categoriaId: 'entretenimiento', tarjetaId: 'demo-mc', usuarioId: 'demo-carlos',
     tipoPago: 'tarjeta', fecha: '2026-06-10', esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
   // Mayo — para que el mes anterior no esté vacío
@@ -112,22 +112,22 @@ const GASTOS: Gasto[] = [
 const GASTOS_FIJOS: GastoFijo[] = [
   {
     id: 'demo-fijo-netflix', titulo: 'Netflix', monto: 17.99, moneda: 'USD',
-    recurrencia: 'mensual', tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
+    recurrencia: TipoRecurrencia.Mensual, tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
     categoriaId: 'suscripciones', activo: true, esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
   {
     id: 'demo-fijo-yt', titulo: 'YouTube Premium', monto: 13.99, moneda: 'USD',
-    recurrencia: 'mensual', tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
+    recurrencia: TipoRecurrencia.Mensual, tarjetaId: 'demo-visa', usuarioId: 'demo-carlos',
     categoriaId: 'suscripciones', activo: true, esCompartido: false,
     creadoEn: NOW, actualizadoEn: NOW,
   },
   {
     id: 'demo-fijo-internet', titulo: 'Internet Kolbi', monto: 29900, moneda: 'CRC',
-    recurrencia: 'mensual', tarjetaId: 'demo-mc', usuarioId: 'demo-maria',
+    recurrencia: TipoRecurrencia.Mensual, tarjetaId: 'demo-mc', usuarioId: 'demo-maria',
     categoriaId: 'apartamento', activo: true, esCompartido: true,
-    detalleCompartido: { tipo: 'mitad_mitad' },
+    detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad },
     creadoEn: NOW, actualizadoEn: NOW,
   },
 ]
@@ -147,7 +147,7 @@ const PLAN_TV: PlanCuotas = {
   montoTotal: 259000, numeroCuotas: 24, montoCuota: 10791.67,
   fechaInicio: '2025-06-01', fechaFin: '2027-05-01',
   tarjetaId: 'demo-mc', usuarioId: 'demo-maria', moneda: 'CRC',
-  esCompartido: true, detalleCompartido: { tipo: 'mitad_mitad' }, creadoEn: NOW,
+  esCompartido: true, detalleCompartido: { tipo: TipoGastoCompartido.MitadMitad }, creadoEn: NOW,
 }
 
 function generarCuotas(plan: PlanCuotas): CuotaMensual[] {
