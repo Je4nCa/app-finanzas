@@ -16,7 +16,10 @@ export const firestore       = getFirestore(firebaseApp)
 export const auth            = getAuth(firebaseApp)
 export const googleProvider  = new GoogleAuthProvider()
 
-const HOUSEHOLD_ID = import.meta.env.VITE_HOUSEHOLD_ID ?? 'local'
+const HOUSEHOLD_ID =
+  localStorage.getItem('mamocitos_household') ??
+  import.meta.env.VITE_HOUSEHOLD_ID ??
+  'local'
 
 export const hCol = (name: string) =>
   collection(firestore, 'households', HOUSEHOLD_ID, name)

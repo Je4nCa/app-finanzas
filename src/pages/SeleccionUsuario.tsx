@@ -1,18 +1,27 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { useUsuarioStore } from '@/store'
+import { seedDemoHousehold, enterDemoMode } from '@/lib/demoMode'
 import type { Usuario } from '@/types'
 
 export default function SeleccionUsuario() {
   const usuarios = useCollection<Usuario>(() => hCol('usuarios'), [])
   const setUsuarioActivo = useUsuarioStore((s) => s.setUsuarioActivo)
   const navigate = useNavigate()
+  const [cargandoDemo, setCargandoDemo] = useState(false)
 
   function seleccionar(usuario: Usuario) {
     setUsuarioActivo(usuario)
     navigate('/dashboard', { replace: true })
+  }
+
+  async function verDemo() {
+    setCargandoDemo(true)
+    await seedDemoHousehold()
+    enterDemoMode()
   }
 
   return (
@@ -60,6 +69,27 @@ export default function SeleccionUsuario() {
             <span className="text-muted-foreground text-lg">›</span>
           </motion.button>
         ))}
+
+        {/* Demo */}
+        <motion.div
+          className="pt-2 flex flex-col items-center gap-2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
+          <div className="flex items-center gap-3 w-full">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">o</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <button
+            onClick={verDemo}
+            disabled={cargandoDemo}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {cargandoDemo ? 'Cargando demo…' : 'Ver versión demo'}
+          </button>
+        </motion.div>
       </div>
 
     </div>

@@ -1,9 +1,10 @@
-import { RefreshCw, LogOut, Pencil, Check, X } from 'lucide-react'
+import { RefreshCw, LogOut, Pencil, Check, X, FlaskConical } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { useMonedaStore, useUsuarioStore } from '@/store'
+import { isDemoMode, exitDemoMode } from '@/lib/demoMode'
 import { cn } from '@/lib/utils'
 import PageWrapper from '@components/ui/PageWrapper'
 import type { Moneda } from '@/types'
@@ -256,6 +257,28 @@ export default function Ajustes() {
           Compra: colones que recibís al vender USD. Venta: colones que pagás al comprar USD.
         </p>
       </section>
+
+      {/* ── Modo demo ─── */}
+      {isDemoMode() && (
+        <section className="flex flex-col gap-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Modo demo
+          </p>
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-center gap-3">
+            <FlaskConical size={18} className="text-amber-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-500">Demo activo</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Los datos son ficticios — nada de esto es real</p>
+            </div>
+            <button
+              onClick={exitDemoMode}
+              className="h-9 px-3 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              Salir
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ── Cuenta Google ─── */}
       <section className="flex flex-col gap-3">
