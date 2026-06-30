@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { useCollection } from '@/hooks/useCollection'
 import { hCol } from '@/lib/firebase'
 import { useUsuarioStore } from '@/store'
-import { seedDemoHousehold, enterDemoMode } from '@/lib/demoMode'
+import { seedDemoHousehold, enterDemoMode, isDemoMode } from '@/lib/demoMode'
 import type { Usuario } from '@/types'
 
 export default function SeleccionUsuario() {
@@ -34,8 +34,10 @@ export default function SeleccionUsuario() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <p className="text-4xl mb-3">💑</p>
-        <h1 className="text-2xl font-bold text-foreground">Mamocitos Financieros</h1>
+        {!isDemoMode() && <p className="text-4xl mb-3">💑</p>}
+        <h1 className="text-2xl font-bold text-foreground">
+          {isDemoMode() ? 'TALENTA FINANZAS' : 'Mamocitos Financieros'}
+        </h1>
         <p className="text-muted-foreground mt-1">¿Quién eres?</p>
       </motion.div>
 
